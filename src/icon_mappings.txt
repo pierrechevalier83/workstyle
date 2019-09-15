@@ -1,5 +1,19 @@
 termite: 
+github: 
+rust: 
+google: 
 firefox: 
+chrome: 
 file manager: 
 libreoffice calc: 
 libreoffice writer: 
+neovim: 
+gthumb: 
+menu: 
+calculator: 
+transmission: 
+videostream: 
+mpv: 
+music: 
+disk usage: 
+.pdf: 
