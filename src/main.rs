@@ -7,13 +7,19 @@ use std::collections::BTreeMap;
 /// Recursively find all windows names in this node
 fn windows_in_node(node: &Node) -> Vec<Option<String>> {
     let mut res = Vec::new();
-    for node in node.nodes.clone() {
-        if node.nodetype == NodeType::Con {
-            res.push(node.name)
-        } else {
-            let child_windows = windows_in_node(&node);
-            for window in child_windows {
-                res.push(window)
+    for node in node
+        .nodes
+        .clone()
+        .iter()
+        .chain(node.floating_nodes.clone().iter())
+    {
+        match node.nodetype {
+            NodeType::Con | NodeType::FloatingCon => res.push(node.name.clone()),
+            _ => {
+                let child_windows = windows_in_node(&node);
+                for window in child_windows {
+                    res.push(window)
+                }
             }
         }
     }
@@ -102,7 +108,7 @@ fn pretty_windows(windows: &Vec<Option<String>>, icon_mappings: &[(String, char)
 fn main() {
     let mut wm = I3Connection::connect().unwrap();
     let mut listener = I3EventListener::connect().unwrap();
-    listener.subscribe(&[Subscription::Window]);
+    listener.subscribe(&[Subscription::Window]).unwrap();
     let icon_mappings = icon_mappings();
     listener.listen().for_each(|_| {
         let tree = wm.get_tree().unwrap();
