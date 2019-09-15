@@ -1,0 +1,5 @@
+termite: 
+firefox: 
+file manager: 
+libreoffice calc: 
+libreoffice writer: 
