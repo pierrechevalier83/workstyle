@@ -1,6 +1,6 @@
 use i3ipc::{
     reply::{Node, NodeType},
-    I3Connection,
+    I3Connection, I3EventListener, Subscription,
 };
 use std::collections::BTreeMap;
 
@@ -50,14 +50,15 @@ fn rename_workspaces(
         .map(|workspace| {
             let name = workspace.name.clone();
             let new_name = pretty_windows(&workspaces[&name], icon_mappings);
-            let number = workspace.num;
-            format!(
-                "rename workspace \"{}\" to \"{}: {}\"",
-                &name, number, &new_name
-            )
+            let new_name = if new_name == "" {
+                format!("{}", workspace.num)
+            } else {
+                format!("{}: {}", workspace.num, new_name)
+            };
+            format!("rename workspace \"{}\" to \"{}\"", &name, &new_name)
         })
         .for_each(|command| {
-            wm.run_command(&command);
+            wm.run_command(&command).unwrap();
         })
 }
 
@@ -100,8 +101,13 @@ fn pretty_windows(windows: &Vec<Option<String>>, icon_mappings: &[(String, char)
 
 fn main() {
     let mut wm = I3Connection::connect().unwrap();
-    let tree = wm.get_tree().unwrap();
-    let workspaces = workspaces_in_node(&tree);
+    let mut listener = I3EventListener::connect().unwrap();
+    listener.subscribe(&[Subscription::Window]);
     let icon_mappings = icon_mappings();
-    rename_workspaces(&mut wm, &workspaces, &icon_mappings);
+    listener.listen().for_each(|_| {
+        let tree = wm.get_tree().unwrap();
+        let workspaces = workspaces_in_node(&tree);
+        rename_workspaces(&mut wm, &workspaces, &icon_mappings);
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    });
 }
