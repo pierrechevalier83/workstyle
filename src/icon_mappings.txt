@@ -7,6 +7,7 @@ chrome: 
 file manager: 
 libreoffice calc: 
 libreoffice writer: 
+libreoffice: 
 neovim: 
 gthumb: 
 menu: 
