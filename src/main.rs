@@ -1,3 +1,5 @@
+mod config;
+
 use i3ipc::{
     reply::{Node, NodeType},
     I3Connection, I3EventListener, Subscription,
@@ -68,22 +70,6 @@ fn rename_workspaces(
         })
 }
 
-fn icon_mappings() -> Vec<(String, char)> {
-    let content = String::from_utf8(include_bytes!("icon_mappings.txt").to_vec()).unwrap();
-    content
-        .split("\n")
-        .filter_map(|s| {
-            let mut split = s.split(": ");
-            split.next().and_then(|name| {
-                split
-                    .next()
-                    .and_then(|icon| icon.chars().next())
-                    .map(|icon| (name.to_string(), icon))
-            })
-        })
-        .collect()
-}
-
 fn pretty_window(window: &String, icon_mappings: &[(String, char)]) -> char {
     for (name, icon) in icon_mappings {
         if window.to_lowercase().contains(name) {
@@ -109,8 +95,9 @@ fn main() {
     let mut wm = I3Connection::connect().unwrap();
     let mut listener = I3EventListener::connect().unwrap();
     listener.subscribe(&[Subscription::Window]).unwrap();
-    let icon_mappings = icon_mappings();
+    config::generate_config_file_if_absent();
     listener.listen().for_each(|_| {
+        let icon_mappings = config::get_icon_mappings();
         let tree = wm.get_tree().unwrap();
         let workspaces = workspaces_in_node(&tree);
         rename_workspaces(&mut wm, &workspaces, &icon_mappings);
