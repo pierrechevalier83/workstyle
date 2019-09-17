@@ -9,3 +9,4 @@ edition = "2018"
 [dependencies]
 i3ipc = "0.10.1"
 dirs = "2.0.2"
+serde_yaml = "0.8.9"
