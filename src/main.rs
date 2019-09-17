@@ -49,7 +49,7 @@ fn workspaces_in_node(node: &Node) -> BTreeMap<String, Vec<Option<String>>> {
 fn rename_workspaces(
     wm: &mut I3Connection,
     workspaces: &BTreeMap<String, Vec<Option<String>>>,
-    icon_mappings: &[(String, char)],
+    icon_mappings: &[(String, String)],
 ) {
     wm.get_workspaces()
         .unwrap()
@@ -70,21 +70,21 @@ fn rename_workspaces(
         })
 }
 
-fn pretty_window(window: &String, icon_mappings: &[(String, char)]) -> char {
+fn pretty_window(window: &String, icon_mappings: &[(String, String)]) -> String {
     for (name, icon) in icon_mappings {
         if window.to_lowercase().contains(name) {
-            return *icon;
+            return icon.clone();
         }
     }
     println!("Couldn't identify window: {}", window);
-    ''
+    "".into()
 }
 
-fn pretty_windows(windows: &Vec<Option<String>>, icon_mappings: &[(String, char)]) -> String {
+fn pretty_windows(windows: &Vec<Option<String>>, icon_mappings: &[(String, String)]) -> String {
     let mut s = String::new();
     for window in windows {
         if let Some(window) = window {
-            s.push(pretty_window(window, icon_mappings));
+            s.push_str(&pretty_window(window, icon_mappings));
             s.push(' ');
         }
     }

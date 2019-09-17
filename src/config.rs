@@ -24,12 +24,10 @@ pub(super) fn generate_config_file_if_absent() {
         let mut config_file = File::create(config_file).unwrap();
         let content = include_bytes!("default_config.yml");
         config_file.write_all(content).unwrap();
-    } else {
-        println!("{:#?} exists", config_file);
     }
 }
 
-pub(super) fn get_icon_mappings() -> Vec<(String, char)> {
+pub(super) fn get_icon_mappings() -> Vec<(String, String)> {
     let mut config_file = File::open(config_file()).unwrap();
     let mut content = String::new();
     config_file.read_to_string(&mut content).unwrap();
