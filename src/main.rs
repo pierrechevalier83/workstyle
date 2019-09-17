@@ -99,9 +99,9 @@ fn main() {
     let mut wm = I3Connection::connect().unwrap();
     let mut listener = I3EventListener::connect().unwrap();
     listener.subscribe(&[Subscription::Window]).unwrap();
-    config::generate_config_file_if_absent();
+    let config_file = config::generate_config_file_if_absent();
     listener.listen().for_each(|_| {
-        let icon_mappings = config::get_icon_mappings();
+        let icon_mappings = config::get_icon_mappings(&config_file);
         let tree = wm.get_tree().unwrap();
         let workspaces = workspaces_in_node(&tree);
         rename_workspaces(&mut wm, &workspaces, &icon_mappings);
