@@ -20,7 +20,6 @@ fn config_file() -> PathBuf {
 pub(super) fn generate_config_file_if_absent() {
     let config_file = config_file();
     if !config_file.exists() {
-        println!("creating {:#?}", config_file);
         let mut config_file = File::create(config_file).unwrap();
         let content = include_bytes!("default_config.yml");
         config_file.write_all(content).unwrap();
