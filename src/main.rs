@@ -15,14 +15,10 @@ fn windows_in_node(node: &Node) -> Vec<Option<String>> {
         .iter()
         .chain(node.floating_nodes.clone().iter())
     {
+        res.extend(windows_in_node(node));
         match node.nodetype {
             NodeType::Con | NodeType::FloatingCon => res.push(node.name.clone()),
-            _ => {
-                let child_windows = windows_in_node(&node);
-                for window in child_windows {
-                    res.push(window)
-                }
-            }
+            _ => (),
         }
     }
     res
