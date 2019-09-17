@@ -5,6 +5,13 @@ use i3ipc::{
     I3Connection, I3EventListener, Subscription,
 };
 use std::collections::BTreeMap;
+use structopt::StructOpt;
+
+#[derive(StructOpt)]
+#[structopt(
+    about = "\nSway workspace names.\n\nThis program will dynamically rename your workspaces to indicate which programs are running in each workspace. It uses the i3 ipc protocol, so should work on i3 or sway.\n\nBy default, each program is mapped to a unicode character for concision.\n\nThe short description of each program is configurable. In the absence of a config file, one will be generated automatically.\nSee ${XDG_CONFIG_HOME}/sway_workspace_names/config.yml for  details."
+)]
+struct Options {}
 
 /// Recursively find all windows names in this node
 fn windows_in_node(node: &Node) -> Vec<Option<String>> {
@@ -88,6 +95,7 @@ fn pretty_windows(windows: &Vec<Option<String>>, icon_mappings: &[(String, Strin
 }
 
 fn main() {
+    let _ = Options::from_args();
     let mut wm = I3Connection::connect().unwrap();
     let mut listener = I3EventListener::connect().unwrap();
     listener.subscribe(&[Subscription::Window]).unwrap();
