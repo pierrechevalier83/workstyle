@@ -80,8 +80,9 @@ fn pretty_window(window: &String, icon_mappings: &[(String, String)]) -> String 
             return icon.clone();
         }
     }
-    println!("Couldn't identify window: {}", window);
-    "".into()
+    log::error!("Couldn't identify window: {}", window);
+    log::info!("Make sure to add an icon for this file in your config file!");
+    " ".into()
 }
 
 fn pretty_windows(windows: &Vec<Option<String>>, icon_mappings: &[(String, String)]) -> String {
@@ -96,6 +97,7 @@ fn pretty_windows(windows: &Vec<Option<String>>, icon_mappings: &[(String, Strin
 }
 
 fn main() {
+    pretty_env_logger::init();
     let _ = Options::from_args();
     let mut wm = I3Connection::connect().unwrap();
     let mut listener = I3EventListener::connect().unwrap();

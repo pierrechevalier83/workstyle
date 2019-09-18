@@ -31,9 +31,13 @@ fn get_icon_mappings_from_config(config: &PathBuf) -> Result<Vec<(String, String
     let mut config_file = File::open(config)?;
     let mut content = String::new();
     config_file.read_to_string(&mut content)?;
-    // TODO: log that error
-    serde_yaml::from_str(&content)
-        .map_err(|_| Error::new(ErrorKind::Other, "Invalid configuration file"))
+    serde_yaml::from_str(&content).map_err(|_| {
+        log::error!(
+            "Error parsing configuration file.\nInvalid syntax in {:#?}.",
+            config
+        );
+        Error::new(ErrorKind::Other, "Invalid configuration file")
+    })
 }
 
 fn get_icon_mappings_from_default_config() -> Vec<(String, String)> {
