@@ -4,7 +4,7 @@ use std::{
     path::PathBuf,
 };
 
-const APP_NAME: &'static str = "sway_workspace_names";
+const APP_NAME: &'static str = "workstyle";
 
 fn config_file() -> Result<PathBuf, Error> {
     let mut path_to_config =

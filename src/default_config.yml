@@ -1,4 +1,4 @@
-# Config for sway_workspace_names
+# Config for workstyle
 #
 # Format:
 # - [pattern, icon]
@@ -29,3 +29,4 @@
 - [music, ]
 - [disk usage, ]
 - [.pdf, ]
+- ["", " "]
