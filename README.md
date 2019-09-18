@@ -38,7 +38,7 @@ Sway configuration
 
 Add this line to your sway config:
 ```
-exec "workstyle &> /tmp/workstyle.log"
+exec_always --no-startup-id workstyle &> /tmp/workstyle.log
 ```
 
 You may also want to control the log level with the environment variable: RUST_LOG to error, info or debug.
