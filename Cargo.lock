@@ -608,7 +608,7 @@ dependencies = [
 
 [[package]]
 name = "workstyle"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "dirs 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "i3ipc 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)",
