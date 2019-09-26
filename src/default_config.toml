@@ -7,12 +7,13 @@
 # The icon will be used to represent that application.
 #
 # Note if multiple patterns are present in the same application name,
-# precedence is given in order of apparition in this list.
+# precedence is given in order of apparition in this file.
 
 "termite" = ""
 "github" = ""
 "rust" = ""
 "google" = ""
+"private browsing" = ""
 "firefox" = ""
 "chrome" = ""
 "file manager" = ""
