@@ -1,9 +1,9 @@
 use std::{
-    collections::BTreeMap,
     fs::{create_dir, File},
     io::{Error, ErrorKind, Read, Write},
     path::PathBuf,
 };
+use toml::Value;
 
 const APP_NAME: &'static str = "workstyle";
 
@@ -28,26 +28,49 @@ pub(super) fn generate_config_file_if_absent() -> Result<PathBuf, Error> {
     Ok(config_file)
 }
 
-fn get_icon_mappings_from_config(config: &PathBuf) -> Result<BTreeMap<String, String>, Error> {
+// I had rather simply deserialize the map with serde, but I don't know what to deserialize into to
+// preserve ordering.
+fn try_from_toml_value(value: &Value) -> Result<Vec<(String, String)>, String> {
+    match value {
+        Value::Table(map) => map
+            .into_iter()
+            .map(|(k, v)| {
+                Ok((
+                    k.clone(),
+                    v.as_str()
+                        .ok_or("Expected for the map value to be a string")?
+                        .into(),
+                ))
+            })
+            .collect(),
+        _ => Err("Expected a map".to_string()),
+    }
+}
+
+fn get_icon_mappings_from_config(config: &PathBuf) -> Result<Vec<(String, String)>, Error> {
     let mut config_file = File::open(config)?;
     let mut content = String::new();
     config_file.read_to_string(&mut content)?;
-    toml::de::from_str(&content).map_err(|e| {
+    try_from_toml_value(&content.parse::<toml::Value>().map_err(|e| {
         log::error!(
             "Error parsing configuration file.\nInvalid syntax in {:#?}.\n{}",
             config,
             e
         );
         Error::new(ErrorKind::Other, "Invalid configuration file")
+    })?)
+    .map_err(|e| {
+        log::error!("{}", e);
+        Error::new(ErrorKind::Other, "Invalid configuration file")
     })
 }
 
-fn get_icon_mappings_from_default_config() -> BTreeMap<String, String> {
-    toml::de::from_slice(include_bytes!("default_config.toml"))
-        .expect("The default config isn't user generated, so we assumed it was correct. This will teach us not to trust programmers.")
+fn get_icon_mappings_from_default_config() -> Vec<(String, String)> {
+    try_from_toml_value(&String::from_utf8(include_bytes!("default_config.toml").iter().cloned().collect()).expect("Expected utf-8 encoded string in default_config.toml").parse::<Value>()
+        .expect("The default config isn't user generated, so we assumed it was correct. This will teach us not to trust programmers.")).expect("Bang!")
 }
 
-pub(super) fn get_icon_mappings(config: &Result<PathBuf, Error>) -> BTreeMap<String, String> {
+pub(super) fn get_icon_mappings(config: &Result<PathBuf, Error>) -> Vec<(String, String)> {
     if let Ok(config) = config {
         if let Ok(content) = get_icon_mappings_from_config(&config) {
             return content;
