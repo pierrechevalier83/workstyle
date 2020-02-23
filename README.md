@@ -17,7 +17,7 @@ Installation
 ===
 
 ```
-cargo install workstyke
+cargo install workstyle
 ```
 
 Usage
