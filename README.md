@@ -63,5 +63,11 @@ The config file is located at `${XDG_CONFIG_HOME}/workstyle/config.toml`. It wil
 When an app isn't recogised in the config, `workstyle` will log the application name as an error.
 Simply add that string (case insensitive) to your config file, with an icon of your choice.
 
-Note that the crate [`find_unicode`](https://github.com/pierrechevalier83/find_unicode/) can help find a unicode character directly from the command line. It now supports all of nerdfonts unicode space.
+If no matching icon can be found in the config, a blank space will be used.
+To override this, set the default icon in the config as per below:
+```
+[other]
+default_icon = "your icon"
+```
 
+Note that the crate [`find_unicode`](https://github.com/pierrechevalier83/find_unicode/) can help find a unicode character directly from the command line. It now supports all of nerdfonts unicode space.
