@@ -1,6 +1,7 @@
+use serde_derive::Deserialize;
 use std::{
     fs::{create_dir, File},
-    io::{Error, ErrorKind, Read, Write},
+    io::{BufReader, Error, ErrorKind, Read, Write},
     path::PathBuf,
 };
 use toml::Value;
@@ -77,4 +78,36 @@ pub(super) fn get_icon_mappings(config: &Result<PathBuf, Error>) -> Vec<(String,
         }
     }
     get_icon_mappings_from_default_config()
+}
+
+#[derive(Debug, Deserialize)]
+struct Config {
+    other: Option<ExtraConfig>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ExtraConfig {
+    default_icon: Option<String>,
+}
+
+pub(super) fn get_default_icon(config: &Result<PathBuf, Error>) -> String {
+    let config_path = config.as_ref().unwrap().to_str().unwrap();
+    let mut config_file = BufReader::new(
+        File::open(config_path).expect(&format!("Failed to open file: {}", config_path)),
+    );
+    let mut content = String::new();
+    config_file
+        .read_to_string(&mut content)
+        .expect("Failed to read file");
+    let config: Config = toml::from_str(&content).unwrap();
+    let icon = if let Some(other) = config.other {
+        if let Some(default_icon) = other.default_icon {
+            default_icon.to_string()
+        } else {
+            " ".into()
+        }
+    } else {
+        " ".into()
+    };
+    icon
 }

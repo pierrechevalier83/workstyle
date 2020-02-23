@@ -54,6 +54,7 @@ fn rename_workspaces(
     wm: &mut I3Connection,
     workspaces: &BTreeMap<String, Vec<Option<String>>>,
     icon_mappings: &[(String, String)],
+    default_icon: &String,
 ) {
     wm.get_workspaces()
         .unwrap()
@@ -61,7 +62,7 @@ fn rename_workspaces(
         .iter()
         .map(|workspace| {
             let name = workspace.name.clone();
-            let new_name = pretty_windows(&workspaces[&name], icon_mappings);
+            let new_name = pretty_windows(&workspaces[&name], icon_mappings, default_icon);
             let new_name = if new_name == "" {
                 format!("{}", workspace.num)
             } else {
@@ -74,7 +75,11 @@ fn rename_workspaces(
         })
 }
 
-fn pretty_window(window: &String, icon_mappings: &[(String, String)]) -> String {
+fn pretty_window(
+    window: &String,
+    icon_mappings: &[(String, String)],
+    default_icon: &String,
+) -> String {
     for (name, icon) in icon_mappings {
         if window.to_lowercase().contains(name) {
             return icon.clone();
@@ -82,14 +87,18 @@ fn pretty_window(window: &String, icon_mappings: &[(String, String)]) -> String 
     }
     log::error!("Couldn't identify window: {}", window);
     log::info!("Make sure to add an icon for this file in your config file!");
-    " ".into()
+    default_icon.to_string()
 }
 
-fn pretty_windows(windows: &Vec<Option<String>>, icon_mappings: &[(String, String)]) -> String {
+fn pretty_windows(
+    windows: &Vec<Option<String>>,
+    icon_mappings: &[(String, String)],
+    default_icon: &String,
+) -> String {
     let mut s = String::new();
     for window in windows {
         if let Some(window) = window {
-            s.push_str(&pretty_window(window, icon_mappings));
+            s.push_str(&pretty_window(window, icon_mappings, default_icon));
             s.push(' ');
         }
     }
@@ -104,10 +113,11 @@ fn main() {
     listener.subscribe(&[Subscription::Window]).unwrap();
     let config_file = config::generate_config_file_if_absent();
     listener.listen().for_each(|_| {
+        let default_icon = config::get_default_icon(&config_file);
         let icon_mappings = config::get_icon_mappings(&config_file);
         let tree = wm.get_tree().unwrap();
         let workspaces = workspaces_in_node(&tree);
-        rename_workspaces(&mut wm, &workspaces, &icon_mappings);
+        rename_workspaces(&mut wm, &workspaces, &icon_mappings, &default_icon);
         std::thread::sleep(std::time::Duration::from_millis(100));
     });
 }
