@@ -108,10 +108,9 @@ pub(super) fn get_fallback_icon(config: &Result<PathBuf, Error>) -> String {
         .read_to_string(&mut content)
         .expect("Failed to read file");
     let config: Config = toml::from_str(&content).unwrap();
-    let icon = if let Some(other) = config.other {
+    if let Some(other) = config.other {
         other.fallback_icon
     } else {
         DEFAULT_FALLBACK_ICON.to_string()
-    };
-    icon
+    }
 }
