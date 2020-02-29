@@ -7,6 +7,7 @@ use std::{
 use toml::Value;
 
 const APP_NAME: &'static str = "workstyle";
+const DEFAULT_FALLBACK_ICON: &'static str = " ";
 
 fn config_file() -> Result<PathBuf, Error> {
     let mut path_to_config =
@@ -87,10 +88,17 @@ struct Config {
 
 #[derive(Debug, Deserialize)]
 struct ExtraConfig {
-    default_icon: Option<String>,
+    #[serde(default = "ExtraConfig::default_fallback_icon")]
+    fallback_icon: String,
 }
 
-pub(super) fn get_default_icon(config: &Result<PathBuf, Error>) -> String {
+impl ExtraConfig {
+  fn default_fallback_icon() -> String {
+      DEFAULT_FALLBACK_ICON.to_string()
+  }
+}
+
+pub(super) fn get_fallback_icon(config: &Result<PathBuf, Error>) -> String {
     let config_path = config.as_ref().unwrap().to_str().unwrap();
     let mut config_file = BufReader::new(
         File::open(config_path).expect(&format!("Failed to open file: {}", config_path)),
@@ -101,13 +109,9 @@ pub(super) fn get_default_icon(config: &Result<PathBuf, Error>) -> String {
         .expect("Failed to read file");
     let config: Config = toml::from_str(&content).unwrap();
     let icon = if let Some(other) = config.other {
-        if let Some(default_icon) = other.default_icon {
-            default_icon.to_string()
-        } else {
-            " ".into()
-        }
+        other.fallback_icon
     } else {
-        " ".into()
+        DEFAULT_FALLBACK_ICON.to_string()
     };
     icon
 }
