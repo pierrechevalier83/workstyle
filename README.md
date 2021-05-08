@@ -67,7 +67,7 @@ If no matching icon can be found in the config, a blank space will be used.
 To override this, set the default icon in the config as per below:
 ```
 [other]
-default_icon = "your icon"
+fallback_icon = "your icon"
 ```
 
 Note that the crate [`find_unicode`](https://github.com/pierrechevalier83/find_unicode/) can help find a unicode character directly from the command line. It now supports all of nerdfonts unicode space.
