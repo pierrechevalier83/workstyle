@@ -34,17 +34,12 @@ pub(super) fn generate_config_file_if_absent() -> Result<PathBuf, Error> {
 // preserve ordering.
 fn try_from_toml_value(value: &Value) -> Result<Vec<(String, String)>, String> {
     match value {
-        Value::Table(map) => map
+        Value::Table(map) => Ok(map
             .into_iter()
-            .map(|(k, v)| {
-                Ok((
-                    k.clone(),
-                    v.as_str()
-                        .ok_or("Expected for the map value to be a string")?
-                        .into(),
-                ))
+            .filter_map(|(k, v)| {
+                v.as_str().map(|v| (k.clone(), v.to_string()))
             })
-            .collect(),
+            .collect()),
         _ => Err("Expected a map".to_string()),
     }
 }
