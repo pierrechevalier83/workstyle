@@ -30,3 +30,5 @@
 "music" = ""
 "disk usage" = ""
 ".pdf" = ""
+[other]
+"fallback_icon" = "🤨"
