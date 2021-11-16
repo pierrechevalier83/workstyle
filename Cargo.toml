@@ -1,15 +1,14 @@
 [package]
 name = "workstyle"
-version = "0.2.1"
+version = "0.3.0"
 authors = ["Pierre Chevalier <pierrechevalier83@gmail.com>"]
-edition = "2018"
+edition = "2021"
 license = "MIT"
 description = "\nWorkspaces with style!\n\nThis program will dynamically rename your workspaces to indicate which programs are running in each workspace. It uses the i3 ipc protocol, which makes it compatible with sway and i3.\n\nBy default, each program is mapped to a unicode character for concision.\n\nThe short description of each program is configurable. In the absence of a config file, one will be generated automatically.\nSee ${XDG_CONFIG_HOME}/workstyle/config.yml for  details."
 homepage = "https://github.com/pierrechevalier83/workstyle"
 repository = "https://github.com/pierrechevalier83/workstyle"
 
 [dependencies]
-i3ipc = "0.10.1"
 dirs = "3.0.2"
 structopt = "0.3.21"
 pretty_env_logger = "0.4.0"
