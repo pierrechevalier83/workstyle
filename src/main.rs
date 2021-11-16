@@ -1,8 +1,8 @@
 mod config;
 
-use i3ipc::{
+use swayipc::{
     reply::{Node, NodeType},
-    I3Connection, I3EventListener, Subscription,
+    Connection, EventType,
 };
 use std::collections::BTreeMap;
 use structopt::StructOpt;
@@ -19,12 +19,11 @@ fn windows_in_node(node: &Node) -> Vec<Option<String>> {
     let mut res = Vec::new();
     for node in node
         .nodes
-        .clone()
         .iter()
-        .chain(node.floating_nodes.clone().iter())
+        .chain(node.floating_nodes.iter())
     {
         res.extend(windows_in_node(node));
-        match node.nodetype {
+        match node.node_type {
             NodeType::Con | NodeType::FloatingCon => res.push(node.name.clone()),
             _ => (),
         }
@@ -36,8 +35,8 @@ fn windows_in_node(node: &Node) -> Vec<Option<String>> {
 /// workspaces
 fn workspaces_in_node(node: &Node) -> BTreeMap<String, Vec<Option<String>>> {
     let mut res = BTreeMap::new();
-    for node in node.nodes.clone() {
-        if node.nodetype == NodeType::Workspace {
+    for node in &node.nodes {
+        if node.node_type == NodeType::Workspace {
             let name = node.name.clone().unwrap();
             res.insert(name, windows_in_node(&node));
         } else {
@@ -51,14 +50,13 @@ fn workspaces_in_node(node: &Node) -> BTreeMap<String, Vec<Option<String>>> {
 }
 
 fn rename_workspaces(
-    wm: &mut I3Connection,
+    wm: &mut Connection,
     workspaces: &BTreeMap<String, Vec<Option<String>>>,
     icon_mappings: &[(String, String)],
     fallback_icon: &String,
 ) {
     wm.get_workspaces()
         .unwrap()
-        .workspaces
         .iter()
         .map(|workspace| {
             let name = workspace.name.clone();
@@ -108,11 +106,10 @@ fn pretty_windows(
 fn main() {
     pretty_env_logger::init();
     let _ = Options::from_args();
-    let mut wm = I3Connection::connect().unwrap();
-    let mut listener = I3EventListener::connect().unwrap();
-    listener.subscribe(&[Subscription::Window]).unwrap();
+    let mut wm = Connection::new().unwrap();
+    let on_window_events = Connection::new().unwrap().subscribe(&[EventType::Window]).unwrap();
     let config_file = config::generate_config_file_if_absent();
-    listener.listen().for_each(|_| {
+    on_window_events.for_each(|_| {
         let fallback_icon = config::get_fallback_icon(&config_file);
         let icon_mappings = config::get_icon_mappings(&config_file);
         let tree = wm.get_tree().unwrap();
