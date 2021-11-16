@@ -1,11 +1,11 @@
 mod config;
 
+use std::collections::BTreeMap;
+use structopt::StructOpt;
 use swayipc::{
     reply::{Node, NodeType},
     Connection, EventType,
 };
-use std::collections::BTreeMap;
-use structopt::StructOpt;
 
 #[derive(StructOpt)]
 #[structopt(
@@ -14,18 +14,61 @@ use structopt::StructOpt;
 )]
 struct Options {}
 
-/// Recursively find all windows names in this node
-fn windows_in_node(node: &Node) -> Vec<Option<String>> {
-    let mut res = Vec::new();
-    for node in node
-        .nodes
-        .iter()
-        .chain(node.floating_nodes.iter())
-    {
-        res.extend(windows_in_node(node));
+#[derive(Debug)]
+struct Window {
+    name: Option<String>,
+    app_id: Option<String>,
+    window_properties_class: Option<String>,
+}
+
+impl Window {
+    fn from_node(node: &Node) -> Option<Self> {
         match node.node_type {
-            NodeType::Con | NodeType::FloatingCon => res.push(node.name.clone()),
-            _ => (),
+            NodeType::Con | NodeType::FloatingCon => {
+                let name = node.name.clone();
+                let app_id = node.app_id.clone();
+                let window_properties_class = node
+                    .window_properties
+                    .as_ref()
+                    .and_then(|window_properties| window_properties.class.clone());
+                if name.is_some() || app_id.is_some() || window_properties_class.is_some() {
+                    Some(Self {
+                        name,
+                        app_id,
+                        window_properties_class,
+                    })
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+    fn matches(&self, pattern: &str) -> bool {
+        self.name
+            .as_ref()
+            .map(|s| s.to_lowercase().contains(pattern))
+            .unwrap_or(false)
+            || self
+                .app_id
+                .as_ref()
+                .map(|s| s.to_lowercase().contains(pattern))
+                .unwrap_or(false)
+            || self
+                .window_properties_class
+                .as_ref()
+                .map(|s| s.to_lowercase().contains(pattern))
+                .unwrap_or(false)
+    }
+}
+
+/// Recursively find all windows names in this node
+fn windows_in_node(node: &Node) -> Vec<Window> {
+    let mut res = Vec::new();
+    for node in node.nodes.iter().chain(node.floating_nodes.iter()) {
+        res.extend(windows_in_node(node));
+        if let Some(window) = Window::from_node(&node) {
+            res.push(window);
         }
     }
     res
@@ -33,7 +76,7 @@ fn windows_in_node(node: &Node) -> Vec<Option<String>> {
 
 /// Recursively find all workspaces in this node and the list of open windows for each of these
 /// workspaces
-fn workspaces_in_node(node: &Node) -> BTreeMap<String, Vec<Option<String>>> {
+fn workspaces_in_node(node: &Node) -> BTreeMap<String, Vec<Window>> {
     let mut res = BTreeMap::new();
     for node in &node.nodes {
         if node.node_type == NodeType::Workspace {
@@ -51,7 +94,7 @@ fn workspaces_in_node(node: &Node) -> BTreeMap<String, Vec<Option<String>>> {
 
 fn rename_workspaces(
     wm: &mut Connection,
-    workspaces: &BTreeMap<String, Vec<Option<String>>>,
+    workspaces: &BTreeMap<String, Vec<Window>>,
     icon_mappings: &[(String, String)],
     fallback_icon: &String,
 ) {
@@ -74,31 +117,29 @@ fn rename_workspaces(
 }
 
 fn pretty_window(
-    window: &String,
+    window: &Window,
     icon_mappings: &[(String, String)],
     fallback_icon: &String,
 ) -> String {
     for (name, icon) in icon_mappings {
-        if window.to_lowercase().contains(name) {
+        if window.matches(name) {
             return icon.clone();
         }
     }
-    log::error!("Couldn't identify window: {}", window);
+    log::error!("Couldn't identify window: {:?}", window);
     log::info!("Make sure to add an icon for this file in your config file!");
     fallback_icon.to_string()
 }
 
 fn pretty_windows(
-    windows: &Vec<Option<String>>,
+    windows: &Vec<Window>,
     icon_mappings: &[(String, String)],
     fallback_icon: &String,
 ) -> String {
     let mut s = String::new();
     for window in windows {
-        if let Some(window) = window {
-            s.push_str(&pretty_window(window, icon_mappings, fallback_icon));
-            s.push(' ');
-        }
+        s.push_str(&pretty_window(window, icon_mappings, fallback_icon));
+        s.push(' ');
     }
     s
 }
@@ -107,7 +148,10 @@ fn main() {
     pretty_env_logger::init();
     let _ = Options::from_args();
     let mut wm = Connection::new().unwrap();
-    let on_window_events = Connection::new().unwrap().subscribe(&[EventType::Window]).unwrap();
+    let on_window_events = Connection::new()
+        .unwrap()
+        .subscribe(&[EventType::Window])
+        .unwrap();
     let config_file = config::generate_config_file_if_absent();
     on_window_events.for_each(|_| {
         let fallback_icon = config::get_fallback_icon(&config_file);

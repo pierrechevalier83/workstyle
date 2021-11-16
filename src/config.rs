@@ -36,9 +36,7 @@ fn try_from_toml_value(value: &Value) -> Result<Vec<(String, String)>, String> {
     match value {
         Value::Table(map) => Ok(map
             .into_iter()
-            .filter_map(|(k, v)| {
-                v.as_str().map(|v| (k.clone(), v.to_string()))
-            })
+            .filter_map(|(k, v)| v.as_str().map(|v| (k.clone(), v.to_string())))
             .collect()),
         _ => Err("Expected a map".to_string()),
     }
@@ -88,9 +86,9 @@ struct ExtraConfig {
 }
 
 impl ExtraConfig {
-  fn default_fallback_icon() -> String {
-      DEFAULT_FALLBACK_ICON.to_string()
-  }
+    fn default_fallback_icon() -> String {
+        DEFAULT_FALLBACK_ICON.to_string()
+    }
 }
 
 pub(super) fn get_fallback_icon(config: &Result<PathBuf, Error>) -> String {
