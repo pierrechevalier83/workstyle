@@ -7,7 +7,7 @@ trait Node {
     fn app_id(&self) -> Option<String>;
     fn window_properties_class(&self) -> Option<String>;
     fn windows_in_node(&self) -> Vec<Window>;
-    fn workspaces_in_node(&self) -> BTreeMap<String, Vec<Window>>;
+    fn workspaces_in_node(&self) -> Result<BTreeMap<String, Vec<Window>>, &'static str>;
 }
 
 impl Node for i3ipc::reply::Node {
@@ -46,19 +46,22 @@ impl Node for i3ipc::reply::Node {
     }
     /// Recursively find all workspaces in this node and the list of open windows for each of these
     /// workspaces
-    fn workspaces_in_node(&self) -> BTreeMap<String, Vec<Window>> {
+    fn workspaces_in_node(&self) -> Result<BTreeMap<String, Vec<Window>>, &'static str> {
         let mut res = BTreeMap::new();
         for node in &self.nodes {
             if node.is_workspace() {
-                res.insert(node.name().unwrap(), node.windows_in_node());
+                res.insert(
+                    node.name().ok_or("Expected some node name")?,
+                    node.windows_in_node(),
+                );
             } else {
-                let workspaces = node.workspaces_in_node();
+                let workspaces = node.workspaces_in_node()?;
                 for (k, v) in workspaces {
                     res.insert(k, v);
                 }
             }
         }
-        res
+        Ok(res)
     }
 }
 
@@ -98,19 +101,22 @@ impl Node for swayipc::reply::Node {
     }
     /// Recursively find all workspaces in this node and the list of open windows for each of these
     /// workspaces
-    fn workspaces_in_node(&self) -> BTreeMap<String, Vec<Window>> {
+    fn workspaces_in_node(&self) -> Result<BTreeMap<String, Vec<Window>>, &'static str> {
         let mut res = BTreeMap::new();
         for node in &self.nodes {
             if node.is_workspace() {
-                res.insert(node.name().unwrap(), node.windows_in_node());
+                res.insert(
+                    node.name().ok_or("Expected some node name")?,
+                    node.windows_in_node(),
+                );
             } else {
-                let workspaces = node.workspaces_in_node();
+                let workspaces = node.workspaces_in_node()?;
                 for (k, v) in workspaces {
                     res.insert(k, v);
                 }
             }
         }
-        res
+        Ok(res)
     }
 }
 
@@ -196,73 +202,93 @@ pub struct WindowManager {
 }
 
 impl WindowManager {
-    pub fn connect() -> (Self, EventListener) {
+    pub fn connect() -> Result<(Self, EventListener), &'static str> {
         if swayipc::Connection::new()
             .map(|mut connection| connection.get_tree().is_ok())
             .unwrap_or(false)
         {
             let listener = swayipc::Connection::new()
-                .unwrap()
+                .map_err(|_| "Couldn't connect to sway")?
                 .subscribe(&[swayipc::EventType::Window])
-                .unwrap();
-            (
+                .map_err(|_| "Couldn't subscribe to events of type Window with sway")?;
+            Ok((
                 Self {
-                    connection: Connection::Sway(swayipc::Connection::new().unwrap()),
+                    connection: Connection::Sway(
+                        swayipc::Connection::new().map_err(|_| "Couldn't connect to Sway")?,
+                    ),
                 },
                 EventListener::Sway(listener),
-            )
+            ))
         } else if i3ipc::I3Connection::connect()
             .map(|mut connection| connection.get_tree().is_ok())
             .unwrap_or(false)
         {
-            let mut listener = i3ipc::I3EventListener::connect().unwrap();
-            listener.subscribe(&[i3ipc::Subscription::Window]).unwrap();
-            (
+            let mut listener = i3ipc::I3EventListener::connect()
+                .map_err(|_| "Couldn't connect an event listener to i3")?;
+            listener
+                .subscribe(&[i3ipc::Subscription::Window])
+                .map_err(|_| "Couldn't subscribe to events of type Window with i3")?;
+            Ok((
                 Self {
-                    connection: Connection::I3(i3ipc::I3Connection::connect().unwrap()),
+                    connection: Connection::I3(
+                        i3ipc::I3Connection::connect().map_err(|_| "Couldn't connect to i3")?,
+                    ),
                 },
                 EventListener::I3(listener),
-            )
+            ))
         } else {
-            panic!("Error, failed to connect to both sway and i3");
+            Result::Err("Error, failed to connect to both sway and i3")
         }
     }
-    pub fn get_windows_in_each_workspace(&mut self) -> BTreeMap<String, Vec<Window>> {
+    pub fn get_windows_in_each_workspace(
+        &mut self,
+    ) -> Result<BTreeMap<String, Vec<Window>>, &'static str> {
         match &mut self.connection {
-            Connection::I3(connection) => connection.get_tree().unwrap().workspaces_in_node(),
-            Connection::Sway(connection) => connection.get_tree().unwrap().workspaces_in_node(),
+            Connection::I3(connection) => connection
+                .get_tree()
+                .map_err(|_| "Failed to get_tree with i3")?
+                .workspaces_in_node(),
+            Connection::Sway(connection) => connection
+                .get_tree()
+                .map_err(|_| "Failed to get_tree with sway")?
+                .workspaces_in_node(),
         }
     }
 
-    pub fn rename_workspaces(&mut self, new_names: BTreeMap<String, String>) {
+    pub fn rename_workspaces(
+        &mut self,
+        new_names: BTreeMap<String, String>,
+    ) -> Result<(), &'static str> {
         match &mut self.connection {
             Connection::I3(connection) => connection
                 .get_workspaces()
-                .unwrap()
+                .map_err(|_| "Failed to get_workspaces with i3")?
                 .workspaces
                 .iter()
-                .for_each(|workspace| {
+                .try_for_each(|workspace| {
                     connection
                         .run_command(&format!(
                             "rename workspace \"{}\" to \"{}\"",
-                            &workspace.name, &new_names.get(&workspace.name).unwrap_or(&workspace.name)
+                            &workspace.name,
+                            &new_names.get(&workspace.name).unwrap_or(&workspace.name)
                         ))
-                        .unwrap();
+                        .map_err(|_| "Failed to run_command with i3")?;
+                    Ok(())
                 }),
-            Connection::Sway(connection) => {
-                connection
-                    .get_workspaces()
-                    .unwrap()
-                    .iter()
-                    .for_each(|workspace| {
-                        connection
-                            .run_command(&format!(
-                                "rename workspace \"{}\" to \"{}\"",
-                                &workspace.name, &new_names.get(&workspace.name).unwrap_or(&workspace.name)
-                            ))
-                            .unwrap();
-                    })
-            }
+            Connection::Sway(connection) => connection
+                .get_workspaces()
+                .map_err(|_| "Failed to get_workspaces with sway")?
+                .iter()
+                .try_for_each(|workspace| {
+                    connection
+                        .run_command(&format!(
+                            "rename workspace \"{}\" to \"{}\"",
+                            &workspace.name,
+                            &new_names.get(&workspace.name).unwrap_or(&workspace.name)
+                        ))
+                        .map_err(|_| "Failed to run_command with sway")?;
+                    Ok(())
+                }),
         }
     }
 }
