@@ -245,7 +245,8 @@ impl WindowManager {
                     connection
                         .run_command(&format!(
                             "rename workspace \"{}\" to \"{}\"",
-                            &workspace.name, &new_names.get(&workspace.name).unwrap_or(&workspace.name)
+                            &workspace.name,
+                            &new_names.get(&workspace.name).unwrap_or(&workspace.name)
                         ))
                         .unwrap();
                 }),
@@ -258,7 +259,8 @@ impl WindowManager {
                         connection
                             .run_command(&format!(
                                 "rename workspace \"{}\" to \"{}\"",
-                                &workspace.name, &new_names.get(&workspace.name).unwrap_or(&workspace.name)
+                                &workspace.name,
+                                &new_names.get(&workspace.name).unwrap_or(&workspace.name)
                             ))
                             .unwrap();
                     })

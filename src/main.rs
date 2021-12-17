@@ -1,9 +1,12 @@
 mod config;
 mod window_manager;
 
+use lockfile::Lockfile;
 use std::collections::BTreeMap;
 use structopt::StructOpt;
 use window_manager::{Window, WindowManager};
+
+const LOCKFILE: &str = "/tmp/workstyle.lock";
 
 #[derive(StructOpt)]
 #[structopt(
@@ -61,6 +64,16 @@ fn pretty_windows(
 
 fn main() {
     pretty_env_logger::init();
+
+    let acquire_lock = Lockfile::create(LOCKFILE);
+    if acquire_lock.is_err() {
+        log::error!("Couldn't acquire lockfile: {:?}", LOCKFILE);
+        log::error!(
+            "If no other instance of workstyle is running, please delete the file manually."
+        );
+        return;
+    }
+
     let _ = Options::from_args();
     let (mut wm, mut listener) = WindowManager::connect();
     let config_file = config::generate_config_file_if_absent();
