@@ -22,14 +22,14 @@ struct Options {}
 fn make_new_workspace_names(
     workspaces: &BTreeMap<String, Vec<Window>>,
     icon_mappings: &[(String, String)],
-    fallback_icon: &String,
+    fallback_icon: &str,
 ) -> Result<BTreeMap<String, String>, &'static str> {
     workspaces
         .iter()
         .map(|(name, windows)| {
-            let new_name = pretty_windows(&windows, icon_mappings, fallback_icon);
-            let num = name.split(":").next().ok_or("Unexpected workspace name")?;
-            if new_name == "" {
+            let new_name = pretty_windows(windows, icon_mappings, fallback_icon);
+            let num = name.split(':').next().ok_or("Unexpected workspace name")?;
+            if new_name.is_empty() {
                 Ok((name.clone(), num.to_string()))
             } else {
                 Ok((name.clone(), format!("{}: {}", num, new_name)))
@@ -41,7 +41,7 @@ fn make_new_workspace_names(
 fn pretty_window(
     window: &Window,
     icon_mappings: &[(String, String)],
-    fallback_icon: &String,
+    fallback_icon: &str,
 ) -> String {
     for (name, icon) in icon_mappings {
         if window.matches(name) {
@@ -54,9 +54,9 @@ fn pretty_window(
 }
 
 fn pretty_windows(
-    windows: &Vec<Window>,
+    windows: &[Window],
     icon_mappings: &[(String, String)],
-    fallback_icon: &String,
+    fallback_icon: &str,
 ) -> String {
     let mut s = String::new();
     for window in windows {

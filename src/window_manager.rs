@@ -15,10 +15,10 @@ impl Node for i3ipc::reply::Node {
         self.nodetype == i3ipc::reply::NodeType::Workspace
     }
     fn is_window(&self) -> bool {
-        match self.nodetype {
-            i3ipc::reply::NodeType::Con | i3ipc::reply::NodeType::FloatingCon => true,
-            _ => false,
-        }
+        matches!(
+            self.nodetype,
+            i3ipc::reply::NodeType::Con | i3ipc::reply::NodeType::FloatingCon
+        )
     }
     fn name(&self) -> Option<String> {
         self.name.clone()
@@ -70,10 +70,10 @@ impl Node for swayipc::reply::Node {
         self.node_type == swayipc::reply::NodeType::Workspace
     }
     fn is_window(&self) -> bool {
-        match self.node_type {
-            swayipc::reply::NodeType::Con | swayipc::reply::NodeType::FloatingCon => true,
-            _ => false,
-        }
+        matches!(
+            self.node_type,
+            swayipc::reply::NodeType::Con | swayipc::reply::NodeType::FloatingCon
+        )
     }
     fn name(&self) -> Option<String> {
         self.name.clone()
@@ -170,7 +170,7 @@ enum Connection {
 }
 
 pub enum Event {
-    I3(i3ipc::event::Event),
+    I3(Box<i3ipc::event::Event>),
     Sway(swayipc::reply::Event),
 }
 
@@ -186,13 +186,11 @@ impl EventListener {
                 listener
                     .listen()
                     .filter_map(|event| event.ok())
-                    .map(|i3_event| Event::I3(i3_event)),
+                    .map(|i3_event| Event::I3(Box::new(i3_event))),
             ),
-            EventListener::Sway(iterator) => Box::new(
-                iterator
-                    .filter_map(|event| event.ok())
-                    .map(|sway_event| Event::Sway(sway_event)),
-            ),
+            EventListener::Sway(iterator) => {
+                Box::new(iterator.filter_map(|event| event.ok()).map(Event::Sway))
+            }
         }
     }
 }

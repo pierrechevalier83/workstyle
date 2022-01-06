@@ -1,4 +1,5 @@
 use serde_derive::Deserialize;
+use std::path::Path;
 use std::{
     fs::{create_dir, File},
     io::{BufReader, Error, ErrorKind, Read, Write},
@@ -6,12 +7,12 @@ use std::{
 };
 use toml::Value;
 
-const APP_NAME: &'static str = "workstyle";
-const DEFAULT_FALLBACK_ICON: &'static str = " ";
+const APP_NAME: &str = "workstyle";
+const DEFAULT_FALLBACK_ICON: &str = " ";
 
 fn config_file() -> Result<PathBuf, Error> {
-    let mut path_to_config =
-        dirs::config_dir().ok_or(Error::new(ErrorKind::Other, "Missing default config dir"))?;
+    let mut path_to_config = dirs::config_dir()
+        .ok_or_else(|| Error::new(ErrorKind::Other, "Missing default config dir"))?;
     path_to_config.push(APP_NAME);
     if !path_to_config.exists() {
         create_dir(path_to_config.clone())?;
@@ -42,7 +43,7 @@ fn try_from_toml_value(value: &Value) -> Result<Vec<(String, String)>, String> {
     }
 }
 
-fn get_icon_mappings_from_config(config: &PathBuf) -> Result<Vec<(String, String)>, Error> {
+fn get_icon_mappings_from_config(config: &Path) -> Result<Vec<(String, String)>, Error> {
     let mut config_file = File::open(config)?;
     let mut content = String::new();
     config_file.read_to_string(&mut content)?;
@@ -61,13 +62,13 @@ fn get_icon_mappings_from_config(config: &PathBuf) -> Result<Vec<(String, String
 }
 
 fn get_icon_mappings_from_default_config() -> Vec<(String, String)> {
-    try_from_toml_value(&String::from_utf8(include_bytes!("default_config.toml").iter().cloned().collect()).expect("Expected utf-8 encoded string in default_config.toml").parse::<Value>()
+    try_from_toml_value(&String::from_utf8(include_bytes!("default_config.toml").to_vec()).expect("Expected utf-8 encoded string in default_config.toml").parse::<Value>()
         .expect("The default config isn't user generated, so we assumed it was correct. This will teach us not to trust programmers.")).expect("Bang!")
 }
 
 pub(super) fn get_icon_mappings(config: &Result<PathBuf, Error>) -> Vec<(String, String)> {
     if let Ok(config) = config {
-        if let Ok(content) = get_icon_mappings_from_config(&config) {
+        if let Ok(content) = get_icon_mappings_from_config(config) {
             return content;
         }
     }
@@ -94,7 +95,7 @@ impl ExtraConfig {
 pub(super) fn get_fallback_icon(config: &Result<PathBuf, Error>) -> String {
     let config_path = config.as_ref().unwrap().to_str().unwrap();
     let mut config_file = BufReader::new(
-        File::open(config_path).expect(&format!("Failed to open file: {}", config_path)),
+        File::open(config_path).unwrap_or_else(|_| panic!("Failed to open file: {}", config_path)),
     );
     let mut content = String::new();
     config_file
