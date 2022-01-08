@@ -2,12 +2,11 @@ mod config;
 mod window_manager;
 
 use crate::window_manager::EventStream;
+use futures::stream::StreamExt;
 use lockfile::Lockfile;
 use signal_hook::consts::TERM_SIGNALS;
-use signal_hook::flag;
-use std::collections::BTreeMap;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use signal_hook_tokio::Signals;
+use std::{collections::BTreeMap, process::exit};
 use structopt::StructOpt;
 use window_manager::{Window, WindowManager};
 
@@ -82,57 +81,53 @@ async fn process_events(
     Err("Can't get next event")
 }
 
+async fn handle_signals(mut signals: Signals, lock: Lockfile) {
+    while let Some(signal) = signals.next().await {
+        if TERM_SIGNALS.contains(&signal) {
+            log::info!("Received termination signal: {}. Exiting...", signal);
+            drop(lock);
+            exit(signal);
+        }
+    }
+}
+
+async fn main_loop(mut wm: WindowManager, mut stream: EventStream) {
+    loop {
+        if process_events(&mut wm, &mut stream).await.is_err() {
+            log::info!("Couldn't process WM events. The WM might have been terminated");
+            log::info!("Attempting to reconnect to the WM");
+            if let Ok((w, s)) = WindowManager::connect().await {
+                wm = w;
+                stream = s;
+                log::info!("Successfully reconnected to WM");
+            } else {
+                log::info!("Failed to reconnect to WM. Will try again in 1 second");
+                std::thread::sleep(std::time::Duration::from_millis(1000));
+            }
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), &'static str> {
     pretty_env_logger::init();
     let _ = Options::from_args();
 
-    let _lock = Lockfile::create(LOCKFILE)
+    let lock = Lockfile::create(LOCKFILE)
         .map_err(|_| "Couldn't acquire lock: /tmp/workstyle.lock already exists")?;
-    let terminated = Arc::new(AtomicBool::new(false));
-    // Register all kill signals
-    for sig in TERM_SIGNALS {
-        // When terminated by a second term signal, exit with exit code 1.
-        // This will do nothing the first time (because term_now is false).
-        flag::register_conditional_shutdown(*sig, 1, Arc::clone(&terminated))
-            .map_err(|_| "Couldn't register signal")?;
-        // But this will "arm" the above for the second time, by setting it to true.
-        // The order of registering these is important, if you put this one first, it will
-        // first arm and then terminate ‒ all in the first round.
-        flag::register(*sig, Arc::clone(&terminated)).map_err(|_| "Couldn't register signal")?;
-    }
 
-    let (mut wm, mut stream) = WindowManager::connect().await?;
-    tokio::spawn({
-        async move {
-            loop {
-                if process_events(&mut wm, &mut stream).await.is_err() {
-                    log::info!("Couldn't process WM events. The WM might have been terminated");
-                    log::info!("Attempting to reconnect to the WM");
-                    if let Ok((w, s)) = WindowManager::connect().await {
-                        wm = w;
-                        stream = s;
-                        log::info!("Successfully reconnected to WM");
-                    } else {
-                        log::info!("Failed to reconnect to WM. Will try again in 1 second");
-                        std::thread::sleep(std::time::Duration::from_millis(1000));
-                    }
-                }
-            }
-        }
-    });
-    log::info!("After spawn");
-    // Do work until we get terminated
-    while !terminated.load(Ordering::Relaxed) {
-        std::thread::sleep(std::time::Duration::from_millis(100));
-        // Not terminated yet. Let the spawned thread do its work
-    }
+    let signals = Signals::new(TERM_SIGNALS).expect("Failed to create Signals");
+    let handle = signals.handle();
+    let termination_signals_task = tokio::spawn(handle_signals(signals, lock));
 
-    // Since our loop is basically an infinite loop,
-    // that only ends when we receive SIGTERM, if
-    // we got here, it's because the loop exited after
-    // receiving SIGTERM
-    log::debug!("Received SIGTERM kill signal. Exiting...");
+    let (wm, stream) = WindowManager::connect().await?;
+    tokio::spawn(main_loop(wm, stream))
+        .await
+        .map_err(|_| "Error in main loop")?;
 
+    handle.close();
+    termination_signals_task
+        .await
+        .map_err(|_| "Terminated by signal")?;
     Ok(())
 }
