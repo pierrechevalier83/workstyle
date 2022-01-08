@@ -74,9 +74,20 @@ async fn process_events(
     while let Ok(_event) = stream.next().await {
         let fallback_icon = config::get_fallback_icon(&config_file);
         let icon_mappings = config::get_icon_mappings(&config_file);
-        let workspaces = wm.get_windows_in_each_workspace().await?;
-        let map = make_new_workspace_names(&workspaces, &icon_mappings, &fallback_icon)?;
-        wm.rename_workspaces(map).await?;
+
+        let workspaces = wm.get_windows_in_each_workspace().await.map_err(|e| {
+            log::error!("{}", e);
+            e
+        })?;
+        let map =
+            make_new_workspace_names(&workspaces, &icon_mappings, &fallback_icon).map_err(|e| {
+                log::error!("{}", e);
+                e
+            })?;
+        wm.rename_workspaces(map).await.map_err(|e| {
+            log::error!("{}", e);
+            e
+        })?;
     }
     Err("Can't get next event")
 }
