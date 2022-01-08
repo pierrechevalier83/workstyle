@@ -1,6 +1,7 @@
 mod config;
 mod window_manager;
 
+use crate::window_manager::EventStream;
 use lockfile::Lockfile;
 use signal_hook::consts::TERM_SIGNALS;
 use signal_hook::flag;
@@ -66,7 +67,23 @@ fn pretty_windows(
     s
 }
 
-fn main() -> Result<(), &'static str> {
+async fn process_events(
+    wm: &mut WindowManager,
+    stream: &mut EventStream,
+) -> Result<(), &'static str> {
+    let config_file = config::generate_config_file_if_absent();
+    while let Ok(_event) = stream.next().await {
+        let fallback_icon = config::get_fallback_icon(&config_file);
+        let icon_mappings = config::get_icon_mappings(&config_file);
+        let workspaces = wm.get_windows_in_each_workspace().await?;
+        let map = make_new_workspace_names(&workspaces, &icon_mappings, &fallback_icon)?;
+        wm.rename_workspaces(map).await?;
+    }
+    Err("Can't get next event")
+}
+
+#[tokio::main]
+async fn main() -> Result<(), &'static str> {
     pretty_env_logger::init();
     let _ = Options::from_args();
 
@@ -85,26 +102,26 @@ fn main() -> Result<(), &'static str> {
         flag::register(*sig, Arc::clone(&terminated)).map_err(|_| "Couldn't register signal")?;
     }
 
-    let (mut wm, mut listener) = WindowManager::connect()?;
-    let config_file = config::generate_config_file_if_absent();
-    let work = move || -> Result<(), &'static str> {
-        {
-            listener
-                .window_events()
-                .try_for_each::<_, Result<(), &'static str>>(|_| {
-                    let fallback_icon = config::get_fallback_icon(&config_file);
-                    let icon_mappings = config::get_icon_mappings(&config_file);
-                    let workspaces = wm.get_windows_in_each_workspace()?;
-                    let map =
-                        make_new_workspace_names(&workspaces, &icon_mappings, &fallback_icon)?;
-                    wm.rename_workspaces(map)?;
-                    std::thread::sleep(std::time::Duration::from_millis(100));
-                    Ok(())
-                })
+    let (mut wm, mut stream) = WindowManager::connect().await?;
+    tokio::spawn({
+        async move {
+            loop {
+                if process_events(&mut wm, &mut stream).await.is_err() {
+                    log::info!("Couldn't process WM events. The WM might have been terminated");
+                    log::info!("Attempting to reconnect to the WM");
+                    if let Ok((w, s)) = WindowManager::connect().await {
+                        wm = w;
+                        stream = s;
+                        log::info!("Successfully reconnected to WM");
+                    } else {
+                        log::info!("Failed to reconnect to WM. Will try again in 1 second");
+                        std::thread::sleep(std::time::Duration::from_millis(1000));
+                    }
+                }
+            }
         }
-    };
-    std::thread::spawn(work);
-
+    });
+    log::info!("After spawn");
     // Do work until we get terminated
     while !terminated.load(Ordering::Relaxed) {
         std::thread::sleep(std::time::Duration::from_millis(100));

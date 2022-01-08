@@ -16,7 +16,12 @@ log = "0.4.14"
 toml = { "version" = "0.5.8", "features" = ["preserve_order"] }
 serde = "1.0"
 serde_derive = "1.0"
-swayipc = "2.7.2"
-i3ipc = "0.10.1"
 lockfile = "0.3.0"
 signal-hook = "0.3.12"
+tokio = { version = "1.15.0", features = ["full"] }
+swayipc-async = "2.0.0"
+async-i3ipc = "0.5.0"
+future-utils = "0.12.1"
+futures-util = "0.3.19"
+
+[features]

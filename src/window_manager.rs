@@ -1,3 +1,4 @@
+use futures_util::stream::StreamExt;
 use std::collections::BTreeMap;
 
 trait Node {
@@ -10,14 +11,14 @@ trait Node {
     fn workspaces_in_node(&self) -> Result<BTreeMap<String, Vec<Window>>, &'static str>;
 }
 
-impl Node for i3ipc::reply::Node {
+impl Node for async_i3ipc::reply::Node {
     fn is_workspace(&self) -> bool {
-        self.nodetype == i3ipc::reply::NodeType::Workspace
+        self.node_type == async_i3ipc::reply::NodeType::Workspace
     }
     fn is_window(&self) -> bool {
         matches!(
-            self.nodetype,
-            i3ipc::reply::NodeType::Con | i3ipc::reply::NodeType::FloatingCon
+            self.node_type,
+            async_i3ipc::reply::NodeType::Con | async_i3ipc::reply::NodeType::FloatingCon
         )
     }
     fn name(&self) -> Option<String> {
@@ -29,7 +30,7 @@ impl Node for i3ipc::reply::Node {
     fn window_properties_class(&self) -> Option<String> {
         self.window_properties
             .as_ref()
-            .and_then(|prop| prop.get(&i3ipc::reply::WindowProperty::Class).cloned())
+            .and_then(|prop| prop.class.clone())
     }
     /// Recursively find all windows names in this node
     fn windows_in_node(&self) -> Vec<Window> {
@@ -65,14 +66,14 @@ impl Node for i3ipc::reply::Node {
     }
 }
 
-impl Node for swayipc::reply::Node {
+impl Node for swayipc_async::Node {
     fn is_workspace(&self) -> bool {
-        self.node_type == swayipc::reply::NodeType::Workspace
+        self.node_type == swayipc_async::NodeType::Workspace
     }
     fn is_window(&self) -> bool {
         matches!(
             self.node_type,
-            swayipc::reply::NodeType::Con | swayipc::reply::NodeType::FloatingCon
+            swayipc_async::NodeType::Con | swayipc_async::NodeType::FloatingCon
         )
     }
     fn name(&self) -> Option<String> {
@@ -165,32 +166,35 @@ impl Window {
 }
 
 enum Connection {
-    I3(i3ipc::I3Connection),
-    Sway(swayipc::Connection),
+    I3(async_i3ipc::I3),
+    Sway(swayipc_async::Connection),
 }
 
 pub enum Event {
-    I3(Box<i3ipc::event::Event>),
-    Sway(swayipc::reply::Event),
+    I3(async_i3ipc::event::Event),
+    Sway(swayipc_async::Event),
 }
 
-pub enum EventListener {
-    I3(i3ipc::I3EventListener),
-    Sway(swayipc::EventIterator),
+pub enum EventStream {
+    I3(async_i3ipc::stream::EventStream),
+    Sway(swayipc_async::EventStream),
 }
 
-impl EventListener {
-    pub fn window_events<'a>(&'a mut self) -> Box<dyn Iterator<Item = Event> + 'a> {
+impl EventStream {
+    pub async fn next(&mut self) -> Result<Event, &'static str> {
         match self {
-            EventListener::I3(listener) => Box::new(
-                listener
-                    .listen()
-                    .filter_map(|event| event.ok())
-                    .map(|i3_event| Event::I3(Box::new(i3_event))),
-            ),
-            EventListener::Sway(iterator) => {
-                Box::new(iterator.filter_map(|event| event.ok()).map(Event::Sway))
-            }
+            EventStream::I3(stream) => stream
+                .next()
+                .await
+                .map(|event| Event::I3(event))
+                .map_err(|_| "I3: Failed to get next window event"),
+
+            EventStream::Sway(stream) => stream
+                .next()
+                .await
+                .ok_or("Sway: unexpectedly exhausted the event stream")?
+                .map(|event| Event::Sway(event))
+                .map_err(|_| "Sway: Failed to get next window event"),
         }
     }
 }
@@ -200,93 +204,113 @@ pub struct WindowManager {
 }
 
 impl WindowManager {
-    pub fn connect() -> Result<(Self, EventListener), &'static str> {
-        if swayipc::Connection::new()
-            .map(|mut connection| connection.get_tree().is_ok())
-            .unwrap_or(false)
+    pub async fn connect() -> Result<(Self, EventStream), &'static str> {
+        if swayipc_async::Connection::new()
+            .await
+            .map(|mut connection| async move { connection.get_tree().await.is_ok() })
+            .is_ok()
         {
-            let listener = swayipc::Connection::new()
+            let stream = swayipc_async::Connection::new()
+                .await
                 .map_err(|_| "Couldn't connect to sway")?
-                .subscribe(&[swayipc::EventType::Window])
+                .subscribe(&[swayipc_async::EventType::Window])
+                .await
                 .map_err(|_| "Couldn't subscribe to events of type Window with sway")?;
             Ok((
                 Self {
                     connection: Connection::Sway(
-                        swayipc::Connection::new().map_err(|_| "Couldn't connect to Sway")?,
+                        swayipc_async::Connection::new()
+                            .await
+                            .map_err(|_| "Couldn't connect to Sway")?,
                     ),
                 },
-                EventListener::Sway(listener),
+                EventStream::Sway(stream),
             ))
-        } else if i3ipc::I3Connection::connect()
-            .map(|mut connection| connection.get_tree().is_ok())
-            .unwrap_or(false)
+        } else if async_i3ipc::I3::connect()
+            .await
+            .map(|mut connection| async move { connection.get_tree().await.is_ok() })
+            .is_ok()
         {
-            let mut listener = i3ipc::I3EventListener::connect()
-                .map_err(|_| "Couldn't connect an event listener to i3")?;
-            listener
-                .subscribe(&[i3ipc::Subscription::Window])
-                .map_err(|_| "Couldn't subscribe to events of type Window with i3")?;
+            let mut i3 = async_i3ipc::I3::connect()
+                .await
+                .map_err(|_| "Couldn't connect to I3")?;
+
+            i3.subscribe(&[async_i3ipc::event::Subscribe::Window])
+                .await
+                .map_err(|_| "Couldn't subscribe to events of type Window with I3")?;
+            let stream = i3.listen();
             Ok((
                 Self {
                     connection: Connection::I3(
-                        i3ipc::I3Connection::connect().map_err(|_| "Couldn't connect to i3")?,
+                        async_i3ipc::I3::connect()
+                            .await
+                            .map_err(|_| "Couldn't connect to i3")?,
                     ),
                 },
-                EventListener::I3(listener),
+                EventStream::I3(stream),
             ))
         } else {
             Result::Err("Error, failed to connect to both sway and i3")
         }
     }
-    pub fn get_windows_in_each_workspace(
+    pub async fn get_windows_in_each_workspace(
         &mut self,
     ) -> Result<BTreeMap<String, Vec<Window>>, &'static str> {
         match &mut self.connection {
             Connection::I3(connection) => connection
                 .get_tree()
+                .await
                 .map_err(|_| "Failed to get_tree with i3")?
                 .workspaces_in_node(),
             Connection::Sway(connection) => connection
                 .get_tree()
+                .await
                 .map_err(|_| "Failed to get_tree with sway")?
                 .workspaces_in_node(),
         }
     }
 
-    pub fn rename_workspaces(
+    pub async fn rename_workspaces(
         &mut self,
         new_names: BTreeMap<String, String>,
     ) -> Result<(), &'static str> {
         match &mut self.connection {
-            Connection::I3(connection) => connection
-                .get_workspaces()
-                .map_err(|_| "Failed to get_workspaces with i3")?
-                .workspaces
-                .iter()
-                .try_for_each(|workspace| {
+            Connection::I3(connection) => {
+                for workspace in connection
+                    .get_workspaces()
+                    .await
+                    .map_err(|_| "Failed to get_workspaces with i3")?
+                    .iter()
+                {
                     connection
                         .run_command(&format!(
                             "rename workspace \"{}\" to \"{}\"",
                             &workspace.name,
                             &new_names.get(&workspace.name).unwrap_or(&workspace.name)
                         ))
+                        .await
                         .map_err(|_| "Failed to run_command with i3")?;
-                    Ok(())
-                }),
-            Connection::Sway(connection) => connection
-                .get_workspaces()
-                .map_err(|_| "Failed to get_workspaces with sway")?
-                .iter()
-                .try_for_each(|workspace| {
+                }
+                Ok(())
+            }
+            Connection::Sway(connection) => {
+                for workspace in connection
+                    .get_workspaces()
+                    .await
+                    .map_err(|_| "Failed to get_workspaces with sway")?
+                    .iter()
+                {
                     connection
                         .run_command(&format!(
                             "rename workspace \"{}\" to \"{}\"",
                             &workspace.name,
                             &new_names.get(&workspace.name).unwrap_or(&workspace.name)
                         ))
+                        .await
                         .map_err(|_| "Failed to run_command with sway")?;
-                    Ok(())
-                }),
+                }
+                Ok(())
+            }
         }
     }
 }
