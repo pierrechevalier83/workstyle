@@ -9,8 +9,7 @@ use signal_hook_tokio::Signals;
 use std::{collections::BTreeMap, process::exit};
 use structopt::StructOpt;
 use window_manager::{Window, WindowManager};
-
-const LOCKFILE: &str = "/tmp/workstyle.lock";
+use std::path::PathBuf;
 
 #[derive(StructOpt)]
 #[structopt(
@@ -124,8 +123,18 @@ async fn main() -> Result<(), &'static str> {
     pretty_env_logger::init();
     let _ = Options::from_args();
 
-    let lock = Lockfile::create(LOCKFILE)
-        .map_err(|_| "Couldn't acquire lock: /tmp/workstyle.lock already exists")?;
+    let mut lockfile_path = match dirs::runtime_dir() {
+        Some(path) => path,
+        None => PathBuf::from("/tmp"),
+    };
+    lockfile_path.push("workstyle.lock");
+
+    let path_str = String::from(lockfile_path.to_str().unwrap());
+
+    let lock = match Lockfile::create(lockfile_path) {
+        Ok(lock) => lock,
+        Err(err) => panic!("Unrecoverable error: {}, {}", err.into_inner(), path_str),
+    };
 
     let signals = Signals::new(TERM_SIGNALS).expect("Failed to create Signals");
     let handle = signals.handle();
