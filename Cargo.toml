@@ -10,7 +10,7 @@ repository = "https://github.com/pierrechevalier83/workstyle"
 
 [dependencies]
 dirs = "3.0.2"
-structopt = "0.3.21"
+clap = { version = "3.0.14", default-features = false, features = ["derive", "std"] }
 pretty_env_logger = "0.4.0"
 log = "0.4.14"
 toml = { "version" = "0.5.8", "features" = ["preserve_order"] }
