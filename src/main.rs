@@ -1,22 +1,30 @@
 mod config;
 mod window_manager;
 
+use clap::Parser;
 use crate::window_manager::EventStream;
 use futures::stream::StreamExt;
 use lockfile::Lockfile;
 use signal_hook::consts::TERM_SIGNALS;
 use signal_hook_tokio::Signals;
 use std::{collections::BTreeMap, process::exit};
-use structopt::StructOpt;
 use window_manager::{Window, WindowManager};
 use std::path::PathBuf;
 
-#[derive(StructOpt)]
-#[structopt(
-    name = "workstyle",
-    about = "\nWorkspaces with style!\n\nThis program will dynamically rename your workspaces to indicate which programs are running in each workspace. It uses the i3 ipc protocol, which makes it compatible with sway and i3.\n\nBy default, each program is mapped to a unicode character for concision.\n\nThe short description of each program is configurable. In the absence of a config file, one will be generated automatically.\nSee ${XDG_CONFIG_HOME}/workstyle/config.yml for  details."
-)]
-struct Options {}
+#[derive(Parser, Debug)]
+#[clap(version, about)]
+/// Workspaces with style!
+///
+/// This program will dynamically rename your workspaces to indicate which
+/// programs are running in each workspace. It uses the i3 ipc protocol, which
+/// makes it compatible with sway and i3.
+///
+/// By default, each program is mapped to a unicode character for concision.
+///
+/// The short description of each program is configurable. In the absence of a
+/// config file, one will be generated automatically.
+/// See ${XDG_CONFIG_HOME}/workstyle/config.yml for  details.
+struct Args {}
 
 fn make_new_workspace_names(
     workspaces: &BTreeMap<String, Vec<Window>>,
@@ -121,7 +129,7 @@ async fn main_loop(mut wm: WindowManager, mut stream: EventStream) {
 #[tokio::main]
 async fn main() -> Result<(), &'static str> {
     pretty_env_logger::init();
-    let _ = Options::from_args();
+    let _ = Args::parse();
 
     let mut lockfile_path = match dirs::runtime_dir() {
         Some(path) => path,
