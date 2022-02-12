@@ -11,14 +11,22 @@ const APP_NAME: &str = "workstyle";
 const DEFAULT_FALLBACK_ICON: &str = " ";
 
 fn config_file() -> Result<PathBuf, Error> {
-    let mut path_to_config = dirs::config_dir()
+    let mut user_path = dirs::config_dir()
         .ok_or_else(|| Error::new(ErrorKind::Other, "Missing default config dir"))?;
-    path_to_config.push(APP_NAME);
-    if !path_to_config.exists() {
-        create_dir(path_to_config.clone())?;
+    user_path.push(APP_NAME);
+    if !user_path.exists() {
+        create_dir(user_path.clone())?;
     }
-    path_to_config.push("config.toml");
-    Ok(path_to_config)
+    user_path.push("config.toml");
+
+    // If user-level config doesn't exist, try system-level config.
+    if !user_path.exists() {
+        let sys_path = PathBuf::from(format!("/etc/xdg/{}/config.toml", APP_NAME));
+        if sys_path.exists() {
+            return Ok(sys_path)
+        }
+    }
+    Ok(user_path)
 }
 
 pub(super) fn generate_config_file_if_absent() -> Result<PathBuf, Error> {
