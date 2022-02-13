@@ -3,6 +3,8 @@ Description=workstyle autostart
 BindsTo=sway-session.target
 
 [Service]
+Environment="RUST_LOG=debug"
+
 ExecStart=/usr/bin/workstyle
 Restart=always
 RestartSec=3
