@@ -1,0 +1,17 @@
+[Unit]
+Description=workstyle autostart
+BindsTo=sway-session.target
+
+[Service]
+Environment="RUST_LOG=debug"
+
+ExecStart=/usr/bin/workstyle
+Restart=always
+RestartSec=3
+
+## Optional resource limits
+# CPUQuota=1%
+# MemoryMax=32M
+
+[Install]
+WantedBy=sway-session.target

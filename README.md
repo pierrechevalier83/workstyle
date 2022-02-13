@@ -53,6 +53,20 @@ over
     bindsym $mod+1 workspace 1
 ```
 
+SystemD integration
+====
+
+Alternatively you can use the workstyle.service file to configure systemd to automatically start workstyle after you login
+
+Copy `workstyle.service` to `$HOME/.config/systemd/user/`
+
+and run
+
+```
+systemctl --user enable workstyle.service
+systemctl --user start workstyle.service
+```
+
 Configuration
 ===
 
