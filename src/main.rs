@@ -1,18 +1,32 @@
+#[macro_use]
+extern crate log;
+#[macro_use]
+extern crate anyhow;
+
+use std::collections::BTreeSet;
+use std::path::PathBuf;
+use std::process::exit;
+use std::sync::Mutex;
+use std::thread::{sleep, spawn};
+use std::time::Duration;
+
+use anyhow::Result;
+use clap::Parser;
+use lockfile::Lockfile;
+use once_cell::sync::Lazy;
+use signal_hook::consts::TERM_SIGNALS;
+use signal_hook::iterator::Signals;
+use swayipc::EventStream;
+
 mod config;
 mod window_manager;
 
-use clap::Parser;
-use crate::window_manager::EventStream;
-use futures::stream::StreamExt;
-use lockfile::Lockfile;
-use signal_hook::consts::TERM_SIGNALS;
-use signal_hook_tokio::Signals;
-use std::{collections::BTreeMap, process::exit};
+use config::Config;
 use window_manager::{Window, WindowManager};
-use std::path::PathBuf;
 
-#[derive(Parser, Debug)]
-#[clap(version, about)]
+static LOCK: Lazy<Mutex<Option<Lockfile>>> =
+    Lazy::new(|| Mutex::new(Lockfile::create(lockfile_path()).ok()));
+
 /// Workspaces with style!
 ///
 /// This program will dynamically rename your workspaces to indicate which
@@ -24,138 +38,117 @@ use std::path::PathBuf;
 /// The short description of each program is configurable. In the absence of a
 /// config file, one will be generated automatically.
 /// See ${XDG_CONFIG_HOME}/workstyle/config.yml for  details.
-struct Args {}
+#[derive(Parser, Debug)]
+#[clap(version, about)]
+struct Args;
 
-fn make_new_workspace_names(
-    workspaces: &BTreeMap<String, Vec<Window>>,
-    icon_mappings: &[(String, String)],
-    fallback_icon: &str,
-) -> Result<BTreeMap<String, String>, &'static str> {
-    workspaces
-        .iter()
-        .map(|(name, windows)| {
-            let new_name = pretty_windows(windows, icon_mappings, fallback_icon);
-            let num = name.split(':').next().ok_or("Unexpected workspace name")?;
-            if new_name.is_empty() {
-                Ok((name.clone(), num.to_string()))
-            } else {
-                Ok((name.clone(), format!("{}: {}", num, new_name)))
-            }
-        })
-        .collect()
-}
-
-fn pretty_window(
-    window: &Window,
-    icon_mappings: &[(String, String)],
-    fallback_icon: &str,
-) -> String {
-    for (name, icon) in icon_mappings {
+fn pretty_window(config: &Config, window: &Window) -> String {
+    for (name, icon) in &config.mappings {
         if window.matches(name) {
             return icon.clone();
         }
     }
-    log::error!("Couldn't identify window: {:?}", window);
-    log::info!("Make sure to add an icon for this file in your config file!");
-    fallback_icon.to_string()
+    warn!("Couldn't identify window: {:?} Make sure to add an icon for this file in your config file!", window);
+    config.fallback_icon().into()
 }
 
-fn pretty_windows(
-    windows: &[Window],
-    icon_mappings: &[(String, String)],
-    fallback_icon: &str,
-) -> String {
+fn pretty_windows(config: &Config, windows: &[Window]) -> String {
     let mut s = String::new();
-    for window in windows {
-        s.push_str(&pretty_window(window, icon_mappings, fallback_icon));
-        s.push(' ');
+    if config.other.merge {
+        let mut set = BTreeSet::new();
+        for window in windows {
+            set.insert(pretty_window(config, window));
+        }
+        for v in set {
+            s.push_str(&v);
+            s.push(' ');
+        }
+    } else {
+        for window in windows {
+            s.push_str(&pretty_window(config, window));
+            s.push(' ');
+        }
     }
     s
 }
 
-async fn process_events(
-    wm: &mut WindowManager,
-    stream: &mut EventStream,
-) -> Result<(), &'static str> {
-    let config_file = config::generate_config_file_if_absent();
-    while let Ok(_event) = stream.next().await {
-        let fallback_icon = config::get_fallback_icon(&config_file);
-        let icon_mappings = config::get_icon_mappings(&config_file);
-
-        let workspaces = wm.get_windows_in_each_workspace().await.map_err(|e| {
-            log::error!("{}", e);
-            e
-        })?;
-        let map =
-            make_new_workspace_names(&workspaces, &icon_mappings, &fallback_icon).map_err(|e| {
-                log::error!("{}", e);
-                e
-            })?;
-        wm.rename_workspaces(map).await.map_err(|e| {
-            log::error!("{}", e);
-            e
-        })?;
-    }
-    Err("Can't get next event")
-}
-
-async fn handle_signals(mut signals: Signals, lock: Lockfile) {
-    while let Some(signal) = signals.next().await {
-        if TERM_SIGNALS.contains(&signal) {
-            log::info!("Received termination signal: {}. Exiting...", signal);
-            drop(lock);
-            exit(signal);
-        }
-    }
-}
-
-async fn main_loop(mut wm: WindowManager, mut stream: EventStream) {
-    loop {
-        if process_events(&mut wm, &mut stream).await.is_err() {
-            log::info!("Couldn't process WM events. The WM might have been terminated");
-            log::info!("Attempting to reconnect to the WM");
-            if let Ok((w, s)) = WindowManager::connect().await {
-                wm = w;
-                stream = s;
-                log::info!("Successfully reconnected to WM");
+fn process_events(config: &Config, mut wm: WindowManager, stream: EventStream) -> Result<()> {
+    for _event in stream {
+        let workspaces = wm.get_windows_in_each_workspace()?;
+        for (name, windows) in workspaces {
+            let new_name = pretty_windows(config, &windows);
+            let num = name
+                .split(':')
+                .next()
+                .ok_or(anyhow!("Unexpected workspace name"))?;
+            if new_name.is_empty() {
+                wm.rename_workspace(&name, num)?;
             } else {
-                log::info!("Failed to reconnect to WM. Will try again in 1 second");
-                std::thread::sleep(std::time::Duration::from_millis(1000));
+                wm.rename_workspace(&name, &format!("{num}: {new_name}"))?;
             }
         }
     }
+    bail!("Can't get next event")
 }
 
-#[tokio::main]
-async fn main() -> Result<(), &'static str> {
-    pretty_env_logger::init();
-    let _ = Args::parse();
-
+fn lockfile_path() -> PathBuf {
     let mut lockfile_path = match dirs::runtime_dir() {
         Some(path) => path,
         None => PathBuf::from("/tmp"),
     };
     lockfile_path.push("workstyle.lock");
+    lockfile_path
+}
 
-    let path_str = String::from(lockfile_path.to_str().unwrap());
+fn aquire_lock() {
+    // Try to aquire the lock
+    if LOCK.lock().unwrap().is_none() {
+        panic!("Failed to aquire the lock");
+    }
 
-    let lock = match Lockfile::create(lockfile_path) {
-        Ok(lock) => lock,
-        Err(err) => panic!("Unrecoverable error: {}, {}", err.into_inner(), path_str),
-    };
+    // Drop the lock on exit
+    let mut signals = Signals::new(TERM_SIGNALS).expect("Failed to create signals iterator");
+    spawn(move || {
+        let _ = signals.forever().next();
+        drop(LOCK.lock().unwrap().take());
+        exit(0);
+    });
 
-    let signals = Signals::new(TERM_SIGNALS).expect("Failed to create Signals");
-    let handle = signals.handle();
-    let termination_signals_task = tokio::spawn(handle_signals(signals, lock));
+    // Drop the lock on panic
+    std::panic::set_hook(Box::new(|info| {
+        error!("{info}");
+        if let Ok(mut lock) = LOCK.lock() {
+            drop(lock.take());
+        }
+    }));
+}
 
-    let (wm, stream) = WindowManager::connect().await?;
-    tokio::spawn(main_loop(wm, stream))
-        .await
-        .map_err(|_| "Error in main loop")?;
+fn main() -> Result<()> {
+    let _ = Args::parse();
+    aquire_lock();
 
-    handle.close();
-    termination_signals_task
-        .await
-        .map_err(|_| "Terminated by signal")?;
-    Ok(())
+    env_logger::init();
+    let config = Config::new()?;
+    loop {
+        let wm;
+        let stream;
+
+        loop {
+            if let Ok((w, s)) = WindowManager::connect() {
+                wm = w;
+                stream = s;
+                info!("Successfully connected to WM");
+                break;
+            } else {
+                error!("Failed to connect to WM. Will try again in 1 second");
+                sleep(Duration::from_secs(1));
+            }
+        }
+
+        if let Err(error) = process_events(&config, wm, stream) {
+            error!("Error: {error}");
+            error!("Couldn't process WM events. The WM might have been terminated");
+            info!("Attempting to reconnect to the WM");
+        }
+    }
 }

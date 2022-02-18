@@ -9,21 +9,16 @@ homepage = "https://github.com/pierrechevalier83/workstyle"
 repository = "https://github.com/pierrechevalier83/workstyle"
 
 [dependencies]
-dirs = "3.0.2"
-clap = { version = "3.0.14", default-features = false, features = ["derive", "std"] }
-pretty_env_logger = "0.4.0"
-log = "0.4.14"
-toml = { "version" = "0.5.8", "features" = ["preserve_order"] }
+anyhow = "1.0"
+clap = { version = "3.0", default-features = false, features = ["std", "derive"] }
+dirs = "3.0"
+toml = "0.5"
 serde = "1.0"
+once_cell = "1.9"
 serde_derive = "1.0"
-lockfile = "0.3.0"
-tokio = { version = "1.15.0", features = ["macros", "rt-multi-thread"] }
-swayipc-async = "2.0.0"
-async-i3ipc = "0.5.0"
-futures-util = "0.3.19"
-signal-hook-tokio = { version = "0.3.1", features = ["futures-v0_3"] }
-signal-hook = "0.3.13"
-futures = "0.3.19"
-sysinfo = "0.22.5"
-
-[features]
+swayipc = "3.0"
+lockfile = "0.3"
+signal-hook = { version = "0.3", default-features = false, features = ["iterator"] }
+log = "0.4"
+env_logger = "0.9"
+indexmap = { version = "1.0", features = ["serde-1"] }
