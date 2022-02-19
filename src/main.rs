@@ -6,17 +6,21 @@ extern crate anyhow;
 mod config;
 mod window_manager;
 
-use anyhow::{Context, Result};
-use clap::Parser;
-use config::Config;
-use futures::stream::StreamExt;
-use lockfile::Lockfile;
-use signal_hook::consts::TERM_SIGNALS;
-use signal_hook_tokio::Signals;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::process::exit;
-use swayipc_async::EventStream;
+use std::sync::Mutex;
+use std::thread::{sleep, spawn};
+use std::time::Duration;
+
+use anyhow::Result;
+use clap::Parser;
+use config::Config;
+use lockfile::Lockfile;
+use once_cell::sync::Lazy;
+use signal_hook::consts::TERM_SIGNALS;
+use signal_hook::iterator::Signals;
+use swayipc::EventStream;
 use window_manager::{Window, WindowManager};
 
 /// Workspaces with style!
@@ -39,6 +43,9 @@ use window_manager::{Window, WindowManager};
 #[derive(Parser, Debug)]
 #[clap(version, about)]
 struct Args;
+
+static LOCK: Lazy<Mutex<Option<Lockfile>>> =
+    Lazy::new(|| Mutex::new(Lockfile::create(lockfile_path()).ok()));
 
 fn pretty_window(config: &Config, window: &Window) -> String {
     for (name, icon) in &config.mappings {
@@ -72,14 +79,12 @@ fn pretty_windows(config: &Config, windows: &[Window]) -> String {
     s
 }
 
-async fn process_events(wm: &mut WindowManager, stream: &mut EventStream) -> Result<()> {
-    while let Some(_event) = stream.next().await {
-        // TODO: watch config file with inotify and read it only when necessary
+fn process_events(mut wm: WindowManager, stream: EventStream) -> Result<()> {
+    for _event in stream {
+        // TODO: watch for changes using inotify and read the config only when needed
         let config = Config::new()?;
-        let workspaces = wm
-            .get_windows_in_each_workspace()
-            .await
-            .map_err(|e| anyhow!(e))?;
+
+        let workspaces = wm.get_windows_in_each_workspace()?;
         for (name, windows) in workspaces {
             let new_name = pretty_windows(&config, &windows);
             let num = name
@@ -87,74 +92,72 @@ async fn process_events(wm: &mut WindowManager, stream: &mut EventStream) -> Res
                 .next()
                 .ok_or_else(|| anyhow!("Unexpected workspace name"))?;
             if new_name.is_empty() {
-                wm.rename_workspace(&name, num).await?;
+                wm.rename_workspace(&name, num)?;
             } else {
-                wm.rename_workspace(&name, &format!("{num}: {new_name}"))
-                    .await?;
+                wm.rename_workspace(&name, &format!("{num}: {new_name}"))?;
             }
         }
     }
     bail!("Can't get next event")
 }
 
-async fn handle_signals(mut signals: Signals, lock: Lockfile) {
-    while let Some(signal) = signals.next().await {
-        if TERM_SIGNALS.contains(&signal) {
-            info!("Received termination signal: {}. Exiting...", signal);
-            drop(lock);
-            exit(signal);
-        }
-    }
-}
-
-async fn main_loop(mut wm: WindowManager, mut stream: EventStream) {
-    loop {
-        if let Err(error) = process_events(&mut wm, &mut stream).await {
-            error!("{error}");
-            info!("Couldn't process WM events. The WM might have been terminated");
-            info!("Attempting to reconnect to the WM");
-            if let Ok((w, s)) = WindowManager::connect().await {
-                wm = w;
-                stream = s;
-                info!("Successfully reconnected to WM");
-            } else {
-                info!("Failed to reconnect to WM. Will try again in 1 second");
-                std::thread::sleep(std::time::Duration::from_millis(1000));
-            }
-        }
-    }
-}
-
-#[tokio::main]
-async fn main() -> Result<()> {
-    env_logger::init();
-    let _ = Args::parse();
-
+fn lockfile_path() -> PathBuf {
     let mut lockfile_path = match dirs::runtime_dir() {
         Some(path) => path,
         None => PathBuf::from("/tmp"),
     };
     lockfile_path.push("workstyle.lock");
+    lockfile_path
+}
 
-    let path_str = String::from(lockfile_path.to_str().unwrap());
+fn aquire_lock() {
+    // Try to aquire the lock
+    if LOCK.lock().unwrap().is_none() {
+        error!("Failed to aquire the lock");
+        exit(1);
+    }
 
-    let lock = match Lockfile::create(lockfile_path) {
-        Ok(lock) => lock,
-        Err(err) => panic!("Unrecoverable error: {}, {}", err.into_inner(), path_str),
-    };
+    // Drop the lock on exit
+    let mut signals = Signals::new(TERM_SIGNALS).expect("Failed to create signals iterator");
+    spawn(move || {
+        let _ = signals.forever().next();
+        drop(LOCK.lock().unwrap().take());
+        exit(0);
+    });
 
-    let signals = Signals::new(TERM_SIGNALS).expect("Failed to create Signals");
-    let handle = signals.handle();
-    let termination_signals_task = tokio::spawn(handle_signals(signals, lock));
+    // Drop the lock on panic
+    std::panic::set_hook(Box::new(|info| {
+        error!("{info}");
+        if let Ok(mut lock) = LOCK.lock() {
+            drop(lock.take());
+        }
+    }));
+}
 
-    let (wm, stream) = WindowManager::connect().await?;
-    tokio::spawn(main_loop(wm, stream))
-        .await
-        .context("Error in main loop")?;
+fn main() -> Result<()> {
+    let _ = Args::parse();
+    aquire_lock();
 
-    handle.close();
-    termination_signals_task
-        .await
-        .context("Terminated by signal")?;
-    Ok(())
+    env_logger::init();
+    loop {
+        let (wm, stream) = loop {
+            match WindowManager::connect() {
+                Ok((w, s)) => {
+                    info!("Successfully connected to WM");
+                    break (w, s);
+                }
+                Err(error) => {
+                    error!("{error}");
+                    error!("Failed to connect to WM. Will try again in 1 second");
+                    sleep(Duration::from_secs(1));
+                }
+            }
+        };
+
+        if let Err(error) = process_events(wm, stream) {
+            error!("Error: {error}");
+            error!("Couldn't process WM events. The WM might have been terminated");
+            info!("Attempting to reconnect to the WM");
+        }
+    }
 }

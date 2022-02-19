@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use std::collections::BTreeMap;
-use swayipc_async::{Connection, EventStream, EventType, Node, NodeType};
+use swayipc::{Connection, EventStream, EventType, Node, NodeType};
 
 trait NodeExt {
     fn is_workspace(&self) -> bool;
@@ -114,35 +114,29 @@ pub struct WindowManager {
 }
 
 impl WindowManager {
-    pub async fn connect() -> Result<(Self, EventStream)> {
+    pub fn connect() -> Result<(Self, EventStream)> {
         let stream = Connection::new()
-            .await
             .context("Couldn't connect to WM")?
             .subscribe(&[EventType::Window])
-            .await
             .context("Couldn't subscribe to events of type Window")?;
         Ok((
             Self {
-                connection: Connection::new()
-                    .await
-                    .context("Couldn't connect to Sway/I3")?,
+                connection: Connection::new().context("Couldn't connect to Sway/I3")?,
             },
             stream,
         ))
     }
 
-    pub async fn get_windows_in_each_workspace(&mut self) -> Result<BTreeMap<String, Vec<Window>>> {
+    pub fn get_windows_in_each_workspace(&mut self) -> Result<BTreeMap<String, Vec<Window>>> {
         self.connection
             .get_tree()
-            .await
             .context("get_tree() failed")?
             .workspaces_in_node()
     }
 
-    pub async fn rename_workspace(&mut self, old: &str, new: &str) -> Result<()> {
+    pub fn rename_workspace(&mut self, old: &str, new: &str) -> Result<()> {
         self.connection
             .run_command(&format!("rename workspace \"{old}\" to \"{new}\"",))
-            .await
             .context("Failed to rename the workspace")?;
         Ok(())
     }
