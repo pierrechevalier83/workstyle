@@ -7,6 +7,7 @@ license = "MIT"
 description = "\nWorkspaces with style!\n\nThis program will dynamically rename your workspaces to indicate which programs are running in each workspace. It uses the i3 ipc protocol, which makes it compatible with sway and i3.\n\nBy default, each program is mapped to a unicode character for concision.\n\nThe short description of each program is configurable. In the absence of a config file, one will be generated automatically.\nSee ${XDG_CONFIG_HOME}/workstyle/config.yml for  details."
 homepage = "https://github.com/pierrechevalier83/workstyle"
 repository = "https://github.com/pierrechevalier83/workstyle"
+exclude = ["screenshots"]
 
 [dependencies]
 dirs = "3.0.2"
