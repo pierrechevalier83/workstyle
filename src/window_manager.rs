@@ -1,3 +1,4 @@
+use anyhow::{Context, Result};
 use std::collections::BTreeMap;
 use swayipc_async::{Connection, EventStream, EventType, Node, NodeType};
 
@@ -8,7 +9,7 @@ trait NodeExt {
     fn app_id(&self) -> Option<String>;
     fn window_properties_class(&self) -> Option<String>;
     fn windows_in_node(&self) -> Vec<Window>;
-    fn workspaces_in_node(&self) -> Result<BTreeMap<String, Vec<Window>>, &'static str>;
+    fn workspaces_in_node(&self) -> Result<BTreeMap<String, Vec<Window>>>;
 }
 
 impl NodeExt for Node {
@@ -44,12 +45,13 @@ impl NodeExt for Node {
     }
     /// Recursively find all workspaces in this node and the list of open windows for each of these
     /// workspaces
-    fn workspaces_in_node(&self) -> Result<BTreeMap<String, Vec<Window>>, &'static str> {
+    fn workspaces_in_node(&self) -> Result<BTreeMap<String, Vec<Window>>> {
         let mut res = BTreeMap::new();
         for node in &self.nodes {
             if node.is_workspace() {
                 res.insert(
-                    node.name().ok_or("Expected some node name")?,
+                    node.name()
+                        .ok_or_else(|| anyhow!("Expected some node name"))?,
                     node.windows_in_node(),
                 );
             } else {
@@ -112,37 +114,36 @@ pub struct WindowManager {
 }
 
 impl WindowManager {
-    pub async fn connect() -> Result<(Self, EventStream), &'static str> {
+    pub async fn connect() -> Result<(Self, EventStream)> {
         let stream = Connection::new()
             .await
-            .map_err(|_| "Couldn't connect to sway")?
+            .context("Couldn't connect to WM")?
             .subscribe(&[EventType::Window])
             .await
-            .map_err(|_| "Couldn't subscribe to events of type Window with sway")?;
+            .context("Couldn't subscribe to events of type Window")?;
         Ok((
             Self {
                 connection: Connection::new()
                     .await
-                    .map_err(|_| "Couldn't connect to Sway/I3")?,
+                    .context("Couldn't connect to Sway/I3")?,
             },
             stream,
         ))
     }
-    pub async fn get_windows_in_each_workspace(
-        &mut self,
-    ) -> Result<BTreeMap<String, Vec<Window>>, &'static str> {
+
+    pub async fn get_windows_in_each_workspace(&mut self) -> Result<BTreeMap<String, Vec<Window>>> {
         self.connection
             .get_tree()
             .await
-            .map_err(|_| "Failed to get_tree with sway")?
+            .context("get_tree() failed")?
             .workspaces_in_node()
     }
 
-    pub async fn rename_workspace(&mut self, old: &str, new: &str) -> Result<(), &'static str> {
+    pub async fn rename_workspace(&mut self, old: &str, new: &str) -> Result<()> {
         self.connection
             .run_command(&format!("rename workspace \"{old}\" to \"{new}\"",))
             .await
-            .map_err(|_| "Failed to run_command with sway")?;
+            .context("Failed to rename the workspace")?;
         Ok(())
     }
 }

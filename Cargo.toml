@@ -23,3 +23,4 @@ futures-util = "0.3.19"
 signal-hook-tokio = { version = "0.3.1", features = ["futures-v0_3"] }
 signal-hook = "0.3.13"
 futures = "0.3.19"
+anyhow = "1.0"

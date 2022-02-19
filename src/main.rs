@@ -1,6 +1,12 @@
+#[macro_use]
+extern crate log;
+#[macro_use]
+extern crate anyhow;
+
 mod config;
 mod window_manager;
 
+use anyhow::{Context, Result};
 use clap::Parser;
 use futures::stream::StreamExt;
 use lockfile::Lockfile;
@@ -36,8 +42,8 @@ fn pretty_window(
             return icon.clone();
         }
     }
-    log::error!("Couldn't identify window: {:?}", window);
-    log::info!("Make sure to add an icon for this file in your config file!");
+    error!("Couldn't identify window: {window:?}");
+    info!("Make sure to add an icon for this file in your config file!");
     fallback_icon.to_string()
 }
 
@@ -54,22 +60,22 @@ fn pretty_windows(
     s
 }
 
-async fn process_events(
-    wm: &mut WindowManager,
-    stream: &mut EventStream,
-) -> Result<(), &'static str> {
+async fn process_events(wm: &mut WindowManager, stream: &mut EventStream) -> Result<()> {
     let config_file = config::generate_config_file_if_absent();
     while let Some(_event) = stream.next().await {
         let fallback_icon = config::get_fallback_icon(&config_file);
         let icon_mappings = config::get_icon_mappings(&config_file);
 
-        let workspaces = wm.get_windows_in_each_workspace().await.map_err(|e| {
-            log::error!("{}", e);
-            e
-        })?;
+        let workspaces = wm
+            .get_windows_in_each_workspace()
+            .await
+            .map_err(|e| anyhow!(e))?;
         for (name, windows) in workspaces {
             let new_name = pretty_windows(&windows, &icon_mappings, &fallback_icon);
-            let num = name.split(':').next().ok_or("Unexpected workspace name")?;
+            let num = name
+                .split(':')
+                .next()
+                .ok_or_else(|| anyhow!("Unexpected workspace name"))?;
             if new_name.is_empty() {
                 wm.rename_workspace(&name, num).await?;
             } else {
@@ -78,13 +84,13 @@ async fn process_events(
             }
         }
     }
-    Err("Can't get next event")
+    bail!("Can't get next event")
 }
 
 async fn handle_signals(mut signals: Signals, lock: Lockfile) {
     while let Some(signal) = signals.next().await {
         if TERM_SIGNALS.contains(&signal) {
-            log::info!("Received termination signal: {}. Exiting...", signal);
+            info!("Received termination signal: {}. Exiting...", signal);
             drop(lock);
             exit(signal);
         }
@@ -93,15 +99,16 @@ async fn handle_signals(mut signals: Signals, lock: Lockfile) {
 
 async fn main_loop(mut wm: WindowManager, mut stream: EventStream) {
     loop {
-        if process_events(&mut wm, &mut stream).await.is_err() {
-            log::info!("Couldn't process WM events. The WM might have been terminated");
-            log::info!("Attempting to reconnect to the WM");
+        if let Err(error) = process_events(&mut wm, &mut stream).await {
+            error!("{error}");
+            info!("Couldn't process WM events. The WM might have been terminated");
+            info!("Attempting to reconnect to the WM");
             if let Ok((w, s)) = WindowManager::connect().await {
                 wm = w;
                 stream = s;
-                log::info!("Successfully reconnected to WM");
+                info!("Successfully reconnected to WM");
             } else {
-                log::info!("Failed to reconnect to WM. Will try again in 1 second");
+                info!("Failed to reconnect to WM. Will try again in 1 second");
                 std::thread::sleep(std::time::Duration::from_millis(1000));
             }
         }
@@ -109,7 +116,7 @@ async fn main_loop(mut wm: WindowManager, mut stream: EventStream) {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), &'static str> {
+async fn main() -> Result<()> {
     pretty_env_logger::init();
     let _ = Args::parse();
 
@@ -133,11 +140,11 @@ async fn main() -> Result<(), &'static str> {
     let (wm, stream) = WindowManager::connect().await?;
     tokio::spawn(main_loop(wm, stream))
         .await
-        .map_err(|_| "Error in main loop")?;
+        .context("Error in main loop")?;
 
     handle.close();
     termination_signals_task
         .await
-        .map_err(|_| "Terminated by signal")?;
+        .context("Terminated by signal")?;
     Ok(())
 }

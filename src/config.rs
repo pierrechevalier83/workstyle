@@ -48,7 +48,7 @@ fn get_icon_mappings_from_config(config: &Path) -> Result<Vec<(String, String)>,
     let mut content = String::new();
     config_file.read_to_string(&mut content)?;
     try_from_toml_value(&content.parse::<toml::Value>().map_err(|e| {
-        log::error!(
+        error!(
             "Error parsing configuration file.\nInvalid syntax in {:#?}.\n{}",
             config,
             e
@@ -56,7 +56,7 @@ fn get_icon_mappings_from_config(config: &Path) -> Result<Vec<(String, String)>,
         Error::new(ErrorKind::Other, "Invalid configuration file")
     })?)
     .map_err(|e| {
-        log::error!("{}", e);
+        error!("{}", e);
         Error::new(ErrorKind::Other, "Invalid configuration file")
     })
 }
