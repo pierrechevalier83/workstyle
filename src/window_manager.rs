@@ -111,20 +111,18 @@ impl Window {
 
 pub struct WindowManager {
     connection: Connection,
+    events: EventStream,
 }
 
 impl WindowManager {
-    pub fn connect() -> Result<(Self, EventStream)> {
-        let stream = Connection::new()
-            .context("Couldn't connect to WM")?
-            .subscribe(&[EventType::Window])
-            .context("Couldn't subscribe to events of type Window")?;
-        Ok((
-            Self {
-                connection: Connection::new().context("Couldn't connect to Sway/I3")?,
-            },
-            stream,
-        ))
+    pub fn connect() -> Result<Self> {
+        Ok(Self {
+            connection: Connection::new().context("Couldn't connect to WM")?,
+            events: Connection::new()
+                .context("Couldn't connect to WM")?
+                .subscribe(&[EventType::Window])
+                .context("Couldn't subscribe to events of type Window")?,
+        })
     }
 
     pub fn get_windows_in_each_workspace(&mut self) -> Result<BTreeMap<String, Vec<Window>>> {
@@ -139,5 +137,13 @@ impl WindowManager {
             .run_command(&format!("rename workspace \"{old}\" to \"{new}\"",))
             .context("Failed to rename the workspace")?;
         Ok(())
+    }
+
+    pub fn wait_for_event(&mut self) -> Result<()> {
+        match self.events.next() {
+            Some(Err(e)) => Err(anyhow!(e).context("Failed to receive next event")),
+            None => bail!("Event stream ended"),
+            _ => Ok(()),
+        }
     }
 }

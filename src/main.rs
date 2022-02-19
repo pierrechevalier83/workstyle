@@ -20,7 +20,6 @@ use lockfile::Lockfile;
 use once_cell::sync::Lazy;
 use signal_hook::consts::TERM_SIGNALS;
 use signal_hook::iterator::Signals;
-use swayipc::EventStream;
 use window_manager::{Window, WindowManager};
 
 /// Workspaces with style!
@@ -79,8 +78,8 @@ fn pretty_windows(config: &Config, windows: &[Window]) -> String {
     s
 }
 
-fn process_events(mut wm: WindowManager, stream: EventStream) -> Result<()> {
-    for _event in stream {
+fn process_events(mut wm: WindowManager) -> Result<()> {
+    loop {
         // TODO: watch for changes using inotify and read the config only when needed
         let config = Config::new()?;
 
@@ -97,8 +96,9 @@ fn process_events(mut wm: WindowManager, stream: EventStream) -> Result<()> {
                 wm.rename_workspace(&name, &format!("{num}: {new_name}"))?;
             }
         }
+
+        wm.wait_for_event()?;
     }
-    bail!("Can't get next event")
 }
 
 fn lockfile_path() -> PathBuf {
@@ -140,11 +140,11 @@ fn main() -> Result<()> {
 
     env_logger::init();
     loop {
-        let (wm, stream) = loop {
+        let wm = loop {
             match WindowManager::connect() {
-                Ok((w, s)) => {
+                Ok(wm) => {
                     info!("Successfully connected to WM");
-                    break (w, s);
+                    break wm;
                 }
                 Err(error) => {
                     error!("{error}");
@@ -154,7 +154,7 @@ fn main() -> Result<()> {
             }
         };
 
-        if let Err(error) = process_events(wm, stream) {
+        if let Err(error) = process_events(wm) {
             error!("Error: {error}");
             error!("Couldn't process WM events. The WM might have been terminated");
             info!("Attempting to reconnect to the WM");
