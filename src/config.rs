@@ -9,6 +9,7 @@ use toml::Value;
 
 const APP_NAME: &str = "workstyle";
 const DEFAULT_FALLBACK_ICON: &str = " ";
+const DEFAULT_CONFIG: &str = include_str!("../default_config.toml");
 
 fn config_file() -> Result<PathBuf, Error> {
     let mut path_to_config = dirs::config_dir()
@@ -25,8 +26,7 @@ pub(super) fn generate_config_file_if_absent() -> Result<PathBuf, Error> {
     let config_file = config_file()?;
     if !config_file.exists() {
         let mut config_file = File::create(&config_file)?;
-        let content = include_bytes!("default_config.toml");
-        config_file.write_all(content)?;
+        config_file.write_all(DEFAULT_CONFIG.as_bytes())?;
     }
     Ok(config_file)
 }
@@ -50,8 +50,7 @@ fn get_icon_mappings_from_config(config: &Path) -> Result<Vec<(String, String)>,
     try_from_toml_value(&content.parse::<toml::Value>().map_err(|e| {
         error!(
             "Error parsing configuration file.\nInvalid syntax in {:#?}.\n{}",
-            config,
-            e
+            config, e
         );
         Error::new(ErrorKind::Other, "Invalid configuration file")
     })?)
@@ -62,7 +61,7 @@ fn get_icon_mappings_from_config(config: &Path) -> Result<Vec<(String, String)>,
 }
 
 fn get_icon_mappings_from_default_config() -> Vec<(String, String)> {
-    try_from_toml_value(&String::from_utf8(include_bytes!("default_config.toml").to_vec()).expect("Expected utf-8 encoded string in default_config.toml").parse::<Value>()
+    try_from_toml_value(&DEFAULT_CONFIG.parse::<Value>()
         .expect("The default config isn't user generated, so we assumed it was correct. This will teach us not to trust programmers.")).expect("Bang!")
 }
 
