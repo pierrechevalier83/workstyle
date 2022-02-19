@@ -8,10 +8,12 @@ mod window_manager;
 
 use anyhow::{Context, Result};
 use clap::Parser;
+use config::Config;
 use futures::stream::StreamExt;
 use lockfile::Lockfile;
 use signal_hook::consts::TERM_SIGNALS;
 use signal_hook_tokio::Signals;
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::process::exit;
 use swayipc_async::EventStream;
@@ -28,50 +30,58 @@ use window_manager::{Window, WindowManager};
 /// The short description of each program is configurable. In the absence of a
 /// config file, one will be generated automatically.
 /// See ${XDG_CONFIG_HOME}/workstyle/config.yml for  details.
+///
+/// If you prefer not to have multiple copies of the same icon when there are
+/// multiple matching windows, set this config option:
+///
+/// [other]
+/// deduplicate_icons = true
 #[derive(Parser, Debug)]
 #[clap(version, about)]
 struct Args;
 
-fn pretty_window(
-    window: &Window,
-    icon_mappings: &[(String, String)],
-    fallback_icon: &str,
-) -> String {
-    for (name, icon) in icon_mappings {
+fn pretty_window(config: &Config, window: &Window) -> String {
+    for (name, icon) in &config.mappings {
         if window.matches(name) {
             return icon.clone();
         }
     }
     error!("Couldn't identify window: {window:?}");
     info!("Make sure to add an icon for this file in your config file!");
-    fallback_icon.to_string()
+    config.fallback_icon().into()
 }
 
-fn pretty_windows(
-    windows: &[Window],
-    icon_mappings: &[(String, String)],
-    fallback_icon: &str,
-) -> String {
+fn pretty_windows(config: &Config, windows: &[Window]) -> String {
     let mut s = String::new();
-    for window in windows {
-        s.push_str(&pretty_window(window, icon_mappings, fallback_icon));
-        s.push(' ');
+    if config.other.deduplicate_icons {
+        let mut set = HashSet::new();
+        for window in windows {
+            let icon = pretty_window(config, window);
+            if set.get(&icon).is_none() {
+                s.push_str(&icon);
+                s.push(' ');
+                set.insert(icon);
+            }
+        }
+    } else {
+        for window in windows {
+            s.push_str(&pretty_window(config, window));
+            s.push(' ');
+        }
     }
     s
 }
 
 async fn process_events(wm: &mut WindowManager, stream: &mut EventStream) -> Result<()> {
-    let config_file = config::generate_config_file_if_absent();
     while let Some(_event) = stream.next().await {
-        let fallback_icon = config::get_fallback_icon(&config_file);
-        let icon_mappings = config::get_icon_mappings(&config_file);
-
+        // TODO: watch config file with inotify and read it only when necessary
+        let config = Config::new()?;
         let workspaces = wm
             .get_windows_in_each_workspace()
             .await
             .map_err(|e| anyhow!(e))?;
         for (name, windows) in workspaces {
-            let new_name = pretty_windows(&windows, &icon_mappings, &fallback_icon);
+            let new_name = pretty_windows(&config, &windows);
             let num = name
                 .split(':')
                 .next()
@@ -117,7 +127,7 @@ async fn main_loop(mut wm: WindowManager, mut stream: EventStream) {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    pretty_env_logger::init();
+    env_logger::init();
     let _ = Args::parse();
 
     let mut lockfile_path = match dirs::runtime_dir() {

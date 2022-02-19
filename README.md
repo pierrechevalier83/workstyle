@@ -79,9 +79,15 @@ Simply add that string (case insensitive) to your config file, with an icon of y
 
 If no matching icon can be found in the config, a blank space will be used.
 To override this, set the default icon in the config as per below:
-```
+```toml
 [other]
 fallback_icon = "your icon"
+```
+
+If you prefer not to have multiple copies of the same icon when there are multiple matching windows, set this config option:
+```toml
+[other]
+deduplicate_icons = true
 ```
 
 Note that the crate [`find_unicode`](https://github.com/pierrechevalier83/find_unicode/) can help find a unicode character directly from the command line. It now supports all of nerdfonts unicode space.

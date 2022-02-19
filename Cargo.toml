@@ -7,11 +7,12 @@ license = "MIT"
 description = "\nWorkspaces with style!\n\nThis program will dynamically rename your workspaces to indicate which programs are running in each workspace. It uses the i3 ipc protocol, which makes it compatible with sway and i3.\n\nBy default, each program is mapped to a unicode character for concision.\n\nThe short description of each program is configurable. In the absence of a config file, one will be generated automatically.\nSee ${XDG_CONFIG_HOME}/workstyle/config.yml for  details."
 homepage = "https://github.com/pierrechevalier83/workstyle"
 repository = "https://github.com/pierrechevalier83/workstyle"
+exclude = ["screenshots"]
 
 [dependencies]
 dirs = "3.0.2"
 clap = { version = "3.0.14", default-features = false, features = ["derive", "std"] }
-pretty_env_logger = "0.4.0"
+env_logger = "0.9"
 log = "0.4.14"
 toml = { "version" = "0.5.8", "features" = ["preserve_order"] }
 serde = "1.0"
@@ -24,3 +25,4 @@ signal-hook-tokio = { version = "0.3.1", features = ["futures-v0_3"] }
 signal-hook = "0.3.13"
 futures = "0.3.19"
 anyhow = "1.0"
+indexmap = "1.8"
