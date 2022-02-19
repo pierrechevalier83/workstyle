@@ -1,6 +1,6 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use indexmap::map::IndexMap;
-use serde::de::{self, Deserialize, Deserializer};
+use serde::de::{self, Deserialize, Deserializer, Error};
 use serde_derive::Deserialize;
 use std::fs::{create_dir, File};
 use std::io::{BufReader, Read, Write};
@@ -27,11 +27,14 @@ impl Config {
         let path = Self::path()?;
         if path.exists() {
             let mut buf = String::new();
-            BufReader::new(File::open(path)?).read_to_string(&mut buf)?;
+            File::open(path)
+                .and_then(|f| BufReader::new(f).read_to_string(&mut buf))
+                .context("Failed to read configuration file")?;
             Ok(toml::from_str(&buf)?)
         } else {
-            let mut file = File::create(path)?;
-            file.write_all(DEFAULT_CONFIG.as_bytes())?;
+            File::create(path)
+                .and_then(|mut f| f.write_all(DEFAULT_CONFIG.as_bytes()))
+                .context("Failed to create default configuration file")?;
             Ok(toml::from_str(DEFAULT_CONFIG)?)
         }
     }
@@ -50,7 +53,7 @@ impl Config {
         };
         retval.push(env!("CARGO_PKG_NAME"));
         if !retval.exists() {
-            create_dir(&retval)?;
+            create_dir(&retval).context("Failed to create configuration directory")?;
         }
         retval.push("config.toml");
         Ok(retval)
@@ -78,11 +81,11 @@ impl<'de> Deserialize<'de> for Config {
                 let mut config = Config::default();
                 while let Some((key, value)) = map.next_entry::<String, toml::Value>()? {
                     if key == "other" {
-                        config.other = Other::deserialize(value).unwrap();
+                        config.other = Other::deserialize(value).map_err(A::Error::custom)?;
                     } else {
                         config
                             .mappings
-                            .insert(key, String::deserialize(value).unwrap());
+                            .insert(key, String::deserialize(value).map_err(A::Error::custom)?);
                     }
                 }
                 Ok(config)
