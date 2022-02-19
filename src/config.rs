@@ -1,109 +1,94 @@
+use anyhow::Result;
+use indexmap::map::IndexMap;
+use serde::de::{self, Deserialize, Deserializer};
 use serde_derive::Deserialize;
-use std::path::Path;
-use std::{
-    fs::{create_dir, File},
-    io::{BufReader, Error, ErrorKind, Read, Write},
-    path::PathBuf,
-};
-use toml::Value;
+use std::fs::{create_dir, File};
+use std::io::{BufReader, Read, Write};
+use std::path::PathBuf;
 
-const APP_NAME: &str = "workstyle";
-const DEFAULT_FALLBACK_ICON: &str = " ";
+const DEFAULT_FALLBACK_ICON: &str = "🤨";
 const DEFAULT_CONFIG: &str = include_str!("../default_config.toml");
 
-fn config_file() -> Result<PathBuf, Error> {
-    let mut path_to_config = dirs::config_dir()
-        .ok_or_else(|| Error::new(ErrorKind::Other, "Missing default config dir"))?;
-    path_to_config.push(APP_NAME);
-    if !path_to_config.exists() {
-        create_dir(path_to_config.clone())?;
-    }
-    path_to_config.push("config.toml");
-    Ok(path_to_config)
+#[derive(Debug, Default, Clone)]
+pub struct Config {
+    pub mappings: IndexMap<String, String>,
+    pub other: Other,
 }
 
-pub(super) fn generate_config_file_if_absent() -> Result<PathBuf, Error> {
-    let config_file = config_file()?;
-    if !config_file.exists() {
-        let mut config_file = File::create(&config_file)?;
-        config_file.write_all(DEFAULT_CONFIG.as_bytes())?;
-    }
-    Ok(config_file)
+#[derive(Debug, Deserialize, Default, Clone)]
+#[serde(default, deny_unknown_fields)]
+pub struct Other {
+    pub fallback_icon: Option<String>,
+    pub merge: bool,
 }
 
-// I had rather simply deserialize the map with serde, but I don't know what to deserialize into to
-// preserve ordering.
-fn try_from_toml_value(value: &Value) -> Result<Vec<(String, String)>, String> {
-    match value {
-        Value::Table(map) => Ok(map
-            .into_iter()
-            .filter_map(|(k, v)| v.as_str().map(|v| (k.clone(), v.to_string())))
-            .collect()),
-        _ => Err("Expected a map".to_string()),
-    }
-}
-
-fn get_icon_mappings_from_config(config: &Path) -> Result<Vec<(String, String)>, Error> {
-    let mut config_file = File::open(config)?;
-    let mut content = String::new();
-    config_file.read_to_string(&mut content)?;
-    try_from_toml_value(&content.parse::<toml::Value>().map_err(|e| {
-        error!(
-            "Error parsing configuration file.\nInvalid syntax in {:#?}.\n{}",
-            config, e
-        );
-        Error::new(ErrorKind::Other, "Invalid configuration file")
-    })?)
-    .map_err(|e| {
-        error!("{}", e);
-        Error::new(ErrorKind::Other, "Invalid configuration file")
-    })
-}
-
-fn get_icon_mappings_from_default_config() -> Vec<(String, String)> {
-    try_from_toml_value(&DEFAULT_CONFIG.parse::<Value>()
-        .expect("The default config isn't user generated, so we assumed it was correct. This will teach us not to trust programmers.")).expect("Bang!")
-}
-
-pub(super) fn get_icon_mappings(config: &Result<PathBuf, Error>) -> Vec<(String, String)> {
-    if let Ok(config) = config {
-        if let Ok(content) = get_icon_mappings_from_config(config) {
-            return content;
+impl Config {
+    pub fn new() -> Result<Self> {
+        let path = Self::path()?;
+        if path.exists() {
+            let mut buf = String::new();
+            BufReader::new(File::open(path)?).read_to_string(&mut buf)?;
+            Ok(toml::from_str(&buf)?)
+        } else {
+            let mut file = File::create(path)?;
+            file.write_all(DEFAULT_CONFIG.as_bytes())?;
+            Ok(toml::from_str(DEFAULT_CONFIG)?)
         }
     }
-    get_icon_mappings_from_default_config()
-}
 
-#[derive(Debug, Deserialize)]
-struct Config {
-    other: Option<ExtraConfig>,
-}
+    pub fn fallback_icon(&self) -> &str {
+        self.other
+            .fallback_icon
+            .as_deref()
+            .unwrap_or(DEFAULT_FALLBACK_ICON)
+    }
 
-#[derive(Debug, Deserialize)]
-struct ExtraConfig {
-    #[serde(default = "ExtraConfig::default_fallback_icon")]
-    fallback_icon: String,
-}
-
-impl ExtraConfig {
-    fn default_fallback_icon() -> String {
-        DEFAULT_FALLBACK_ICON.to_string()
+    pub fn path() -> Result<PathBuf> {
+        let mut retval = match dirs::config_dir() {
+            Some(path) => path,
+            None => bail!("Could not find the configuration path"),
+        };
+        retval.push(env!("CARGO_PKG_NAME"));
+        if !retval.exists() {
+            create_dir(&retval)?;
+        }
+        retval.push("config.toml");
+        Ok(retval)
     }
 }
 
-pub(super) fn get_fallback_icon(config: &Result<PathBuf, Error>) -> String {
-    let config_path = config.as_ref().unwrap().to_str().unwrap();
-    let mut config_file = BufReader::new(
-        File::open(config_path).unwrap_or_else(|_| panic!("Failed to open file: {}", config_path)),
-    );
-    let mut content = String::new();
-    config_file
-        .read_to_string(&mut content)
-        .expect("Failed to read file");
-    let config: Config = toml::from_str(&content).unwrap();
-    if let Some(other) = config.other {
-        other.fallback_icon
-    } else {
-        DEFAULT_FALLBACK_ICON.to_string()
+impl<'de> Deserialize<'de> for Config {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct Visitor;
+
+        impl<'de> de::Visitor<'de> for Visitor {
+            type Value = Config;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("workstyle configuration map")
+            }
+
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: de::MapAccess<'de>,
+            {
+                let mut config = Config::default();
+                while let Some((key, value)) = map.next_entry::<String, toml::Value>()? {
+                    if key == "other" {
+                        config.other = Other::deserialize(value).unwrap();
+                    } else {
+                        config
+                            .mappings
+                            .insert(key, String::deserialize(value).unwrap());
+                    }
+                }
+                Ok(config)
+            }
+        }
+
+        deserializer.deserialize_any(Visitor)
     }
 }

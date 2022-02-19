@@ -30,5 +30,7 @@
 "music" = ""
 "disk usage" = ""
 ".pdf" = ""
+
 [other]
-"fallback_icon" = "🤨"
+fallback_icon = "🤨"
+merge = false

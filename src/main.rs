@@ -8,10 +8,12 @@ mod window_manager;
 
 use anyhow::{Context, Result};
 use clap::Parser;
+use config::Config;
 use futures::stream::StreamExt;
 use lockfile::Lockfile;
 use signal_hook::consts::TERM_SIGNALS;
 use signal_hook_tokio::Signals;
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::process::exit;
 use swayipc_async::EventStream;
@@ -32,46 +34,47 @@ use window_manager::{Window, WindowManager};
 #[clap(version, about)]
 struct Args;
 
-fn pretty_window(
-    window: &Window,
-    icon_mappings: &[(String, String)],
-    fallback_icon: &str,
-) -> String {
-    for (name, icon) in icon_mappings {
+fn pretty_window(config: &Config, window: &Window) -> String {
+    for (name, icon) in &config.mappings {
         if window.matches(name) {
             return icon.clone();
         }
     }
-    error!("Couldn't identify window: {window:?}");
+    warn!("Couldn't identify window: {window:?}");
     info!("Make sure to add an icon for this file in your config file!");
-    fallback_icon.to_string()
+    config.fallback_icon().into()
 }
 
-fn pretty_windows(
-    windows: &[Window],
-    icon_mappings: &[(String, String)],
-    fallback_icon: &str,
-) -> String {
+fn pretty_windows(config: &Config, windows: &[Window]) -> String {
     let mut s = String::new();
-    for window in windows {
-        s.push_str(&pretty_window(window, icon_mappings, fallback_icon));
-        s.push(' ');
+    if config.other.merge {
+        let mut set = BTreeSet::new();
+        for window in windows {
+            set.insert(pretty_window(config, window));
+        }
+        for v in set {
+            s.push_str(&v);
+            s.push(' ');
+        }
+    } else {
+        for window in windows {
+            s.push_str(&pretty_window(config, window));
+            s.push(' ');
+        }
     }
     s
 }
 
 async fn process_events(wm: &mut WindowManager, stream: &mut EventStream) -> Result<()> {
-    let config_file = config::generate_config_file_if_absent();
     while let Some(_event) = stream.next().await {
-        let fallback_icon = config::get_fallback_icon(&config_file);
-        let icon_mappings = config::get_icon_mappings(&config_file);
-
+        // TODO: watch config file with inotify and read it only when necessary
+        let config = Config::new()?;
         let workspaces = wm
             .get_windows_in_each_workspace()
             .await
             .map_err(|e| anyhow!(e))?;
         for (name, windows) in workspaces {
-            let new_name = pretty_windows(&windows, &icon_mappings, &fallback_icon);
+            let new_name = pretty_windows(&config, &windows);
             let num = name
                 .split(':')
                 .next()

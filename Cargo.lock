@@ -816,6 +816,7 @@ dependencies = [
  "dirs",
  "futures",
  "futures-util",
+ "indexmap",
  "lockfile",
  "log",
  "pretty_env_logger",
