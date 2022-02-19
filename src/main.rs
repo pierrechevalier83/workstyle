@@ -13,7 +13,7 @@ use futures::stream::StreamExt;
 use lockfile::Lockfile;
 use signal_hook::consts::TERM_SIGNALS;
 use signal_hook_tokio::Signals;
-use std::collections::BTreeSet;
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::process::exit;
 use swayipc_async::EventStream;
@@ -48,13 +48,14 @@ fn pretty_window(config: &Config, window: &Window) -> String {
 fn pretty_windows(config: &Config, windows: &[Window]) -> String {
     let mut s = String::new();
     if config.other.merge {
-        let mut set = BTreeSet::new();
+        let mut set = HashSet::new();
         for window in windows {
-            set.insert(pretty_window(config, window));
-        }
-        for v in set {
-            s.push_str(&v);
-            s.push(' ');
+            let icon = pretty_window(config, window);
+            if set.get(&icon).is_none() {
+                s.push_str(&icon);
+                s.push(' ');
+                set.insert(icon);
+            }
         }
     } else {
         for window in windows {
