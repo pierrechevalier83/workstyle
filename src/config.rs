@@ -6,7 +6,7 @@ use std::fs::{create_dir, File};
 use std::io::{BufReader, Read, Write};
 use std::path::PathBuf;
 
-const DEFAULT_FALLBACK_ICON: &str = "🤨";
+const DEFAULT_FALLBACK_ICON: &str = "-";
 const DEFAULT_CONFIG: &str = include_str!("../default_config.toml");
 
 #[derive(Debug, Default, Clone)]
