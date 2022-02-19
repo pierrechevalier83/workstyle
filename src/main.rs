@@ -127,7 +127,7 @@ async fn main_loop(mut wm: WindowManager, mut stream: EventStream) {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    pretty_env_logger::init();
+    env_logger::init();
     let _ = Args::parse();
 
     let mut lockfile_path = match dirs::runtime_dir() {
