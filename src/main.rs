@@ -30,6 +30,12 @@ use window_manager::{Window, WindowManager};
 /// The short description of each program is configurable. In the absence of a
 /// config file, one will be generated automatically.
 /// See ${XDG_CONFIG_HOME}/workstyle/config.yml for  details.
+///
+/// If you prefer not to have multiple copies of the same icon when there are
+/// multiple matching windows, set this config option:
+///
+/// [other]
+/// deduplicate_icons = true
 #[derive(Parser, Debug)]
 #[clap(version, about)]
 struct Args;
