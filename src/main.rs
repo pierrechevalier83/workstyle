@@ -46,7 +46,7 @@ fn pretty_window(config: &Config, window: &Window) -> String {
             return icon.clone();
         }
     }
-    warn!("Couldn't identify window: {window:?}");
+    error!("Couldn't identify window: {window:?}");
     info!("Make sure to add an icon for this file in your config file!");
     config.fallback_icon().into()
 }
