@@ -49,7 +49,7 @@ impl Config {
     pub fn path() -> Result<PathBuf> {
         let mut user_path =
             dirs::config_dir().ok_or_else(|| anyhow!("Could not find the configuration path"))?;
-        let mut system_path = PathBuf::from("etc/xdg");
+        let mut system_path = PathBuf::from("/etc/xdg");
 
         for path in [&mut user_path, &mut system_path] {
             path.push(env!("CARGO_PKG_NAME"));
