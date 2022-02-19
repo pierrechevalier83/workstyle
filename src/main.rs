@@ -135,10 +135,10 @@ fn aquire_lock() {
 }
 
 fn main() -> Result<()> {
+    env_logger::init();
     let _ = Args::parse();
     aquire_lock();
 
-    env_logger::init();
     loop {
         let wm = loop {
             match WindowManager::connect() {
