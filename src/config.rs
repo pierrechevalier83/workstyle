@@ -47,16 +47,26 @@ impl Config {
     }
 
     pub fn path() -> Result<PathBuf> {
-        let mut retval = match dirs::config_dir() {
-            Some(path) => path,
-            None => bail!("Could not find the configuration path"),
-        };
-        retval.push(env!("CARGO_PKG_NAME"));
-        if !retval.exists() {
-            create_dir(&retval).context("Failed to create configuration directory")?;
+        let mut user_path =
+            dirs::config_dir().ok_or_else(|| anyhow!("Could not find the configuration path"))?;
+        let mut system_path = PathBuf::from("etc/xdg");
+
+        for path in [&mut user_path, &mut system_path] {
+            path.push(env!("CARGO_PKG_NAME"));
+            path.push("config.toml");
         }
-        retval.push("config.toml");
-        Ok(retval)
+        let path = if system_path.exists() && !user_path.exists() {
+            system_path
+        } else {
+            user_path
+        };
+        let dir = path
+            .parent()
+            .ok_or_else(|| anyhow!("Expected path to contain a parent directory"))?;
+        if !dir.exists() {
+            create_dir(dir).context("Failed to create configuration directory")?;
+        }
+        Ok(path)
     }
 }
 
