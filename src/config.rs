@@ -19,7 +19,7 @@ pub struct Config {
 #[serde(default, deny_unknown_fields)]
 pub struct Other {
     pub fallback_icon: Option<String>,
-    pub merge: bool,
+    pub deduplicate_icons: bool,
 }
 
 impl Config {

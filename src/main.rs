@@ -47,7 +47,7 @@ fn pretty_window(config: &Config, window: &Window) -> String {
 
 fn pretty_windows(config: &Config, windows: &[Window]) -> String {
     let mut s = String::new();
-    if config.other.merge {
+    if config.other.deduplicate_icons {
         let mut set = HashSet::new();
         for window in windows {
             let icon = pretty_window(config, window);

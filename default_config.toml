@@ -33,4 +33,4 @@
 
 [other]
 fallback_icon = "🤨"
-merge = false
+deduplicate_icons = false
