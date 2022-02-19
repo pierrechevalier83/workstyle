@@ -2,17 +2,15 @@ mod config;
 mod window_manager;
 
 use clap::Parser;
-use crate::window_manager::EventStream;
 use futures::stream::StreamExt;
 use lockfile::Lockfile;
 use signal_hook::consts::TERM_SIGNALS;
 use signal_hook_tokio::Signals;
-use std::{collections::BTreeMap, process::exit};
-use window_manager::{Window, WindowManager};
 use std::path::PathBuf;
+use std::process::exit;
+use swayipc_async::EventStream;
+use window_manager::{Window, WindowManager};
 
-#[derive(Parser, Debug)]
-#[clap(version, about)]
 /// Workspaces with style!
 ///
 /// This program will dynamically rename your workspaces to indicate which
@@ -24,26 +22,9 @@ use std::path::PathBuf;
 /// The short description of each program is configurable. In the absence of a
 /// config file, one will be generated automatically.
 /// See ${XDG_CONFIG_HOME}/workstyle/config.yml for  details.
-struct Args {}
-
-fn make_new_workspace_names(
-    workspaces: &BTreeMap<String, Vec<Window>>,
-    icon_mappings: &[(String, String)],
-    fallback_icon: &str,
-) -> Result<BTreeMap<String, String>, &'static str> {
-    workspaces
-        .iter()
-        .map(|(name, windows)| {
-            let new_name = pretty_windows(windows, icon_mappings, fallback_icon);
-            let num = name.split(':').next().ok_or("Unexpected workspace name")?;
-            if new_name.is_empty() {
-                Ok((name.clone(), num.to_string()))
-            } else {
-                Ok((name.clone(), format!("{}: {}", num, new_name)))
-            }
-        })
-        .collect()
-}
+#[derive(Parser, Debug)]
+#[clap(version, about)]
+struct Args;
 
 fn pretty_window(
     window: &Window,
@@ -78,7 +59,7 @@ async fn process_events(
     stream: &mut EventStream,
 ) -> Result<(), &'static str> {
     let config_file = config::generate_config_file_if_absent();
-    while let Ok(_event) = stream.next().await {
+    while let Some(_event) = stream.next().await {
         let fallback_icon = config::get_fallback_icon(&config_file);
         let icon_mappings = config::get_icon_mappings(&config_file);
 
@@ -86,15 +67,16 @@ async fn process_events(
             log::error!("{}", e);
             e
         })?;
-        let map =
-            make_new_workspace_names(&workspaces, &icon_mappings, &fallback_icon).map_err(|e| {
-                log::error!("{}", e);
-                e
-            })?;
-        wm.rename_workspaces(map).await.map_err(|e| {
-            log::error!("{}", e);
-            e
-        })?;
+        for (name, windows) in workspaces {
+            let new_name = pretty_windows(&windows, &icon_mappings, &fallback_icon);
+            let num = name.split(':').next().ok_or("Unexpected workspace name")?;
+            if new_name.is_empty() {
+                wm.rename_workspace(&name, num).await?;
+            } else {
+                wm.rename_workspace(&name, &format!("{num}: {new_name}"))
+                    .await?;
+            }
+        }
     }
     Err("Can't get next event")
 }
