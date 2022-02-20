@@ -18,8 +18,14 @@ Note: if you are using waybar and want the workspaces to be displayed with their
 Installation
 ===
 
+Install the latest published version from crates.io with
 ```
 cargo install workstyle
+```
+
+Or for Arch Linux users, install the freshest git version with your favourite AUR helper, e.g.
+```
+yay -S workstyle-git
 ```
 
 Usage
