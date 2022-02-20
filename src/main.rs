@@ -78,29 +78,6 @@ fn pretty_windows(config: &Config, windows: &[Window]) -> String {
     s
 }
 
-fn process_events(mut wm: WindowManager) -> Result<()> {
-    loop {
-        // TODO: watch for changes using inotify and read the config only when needed
-        let config = Config::new()?;
-
-        let workspaces = wm.get_windows_in_each_workspace()?;
-        for (name, windows) in workspaces {
-            let new_name = pretty_windows(&config, &windows);
-            let num = name
-                .split(':')
-                .next()
-                .ok_or_else(|| anyhow!("Unexpected workspace name"))?;
-            if new_name.is_empty() {
-                wm.rename_workspace(&name, num)?;
-            } else {
-                wm.rename_workspace(&name, &format!("{num}: {new_name}"))?;
-            }
-        }
-
-        wm.wait_for_event()?;
-    }
-}
-
 fn lockfile_path() -> PathBuf {
     let mut lockfile_path = match dirs::runtime_dir() {
         Some(path) => path,
@@ -134,31 +111,40 @@ fn aquire_lock() {
     }));
 }
 
-fn main() -> Result<()> {
+fn run() -> Result<()> {
+    let mut wm = WindowManager::connect()?;
+    info!("Successfully connected to WM");
+
+    loop {
+        // TODO: watch for changes using inotify and read the config only when needed
+        let config = Config::new()?;
+
+        let workspaces = wm.get_windows_in_each_workspace()?;
+        for (name, windows) in workspaces {
+            let new_name = pretty_windows(&config, &windows);
+            let num = name
+                .split(':')
+                .next()
+                .ok_or_else(|| anyhow!("Unexpected workspace name"))?;
+            if new_name.is_empty() {
+                wm.rename_workspace(&name, num)?;
+            } else {
+                wm.rename_workspace(&name, &format!("{num}: {new_name}"))?;
+            }
+        }
+
+        wm.wait_for_event()?;
+    }
+}
+
+fn main() {
     env_logger::init();
     let _ = Args::parse();
     aquire_lock();
-
     loop {
-        let wm = loop {
-            match WindowManager::connect() {
-                Ok(wm) => {
-                    info!("Successfully connected to WM");
-                    break wm;
-                }
-                Err(error) => {
-                    error!("{error}");
-                    error.chain().skip(1).for_each(|e| error!("because: {e}"));
-                    error!("Failed to connect to WM. Will try again in 1 second");
-                    sleep(Duration::from_secs(1));
-                }
-            }
-        };
-
-        if let Err(error) = process_events(wm) {
-            error!("{error}");
-            error.chain().skip(1).for_each(|e| error!("because: {e}"));
-            error!("Couldn't process WM events. The WM might have been terminated");
+        if let Err(e) = run() {
+            error!("{e}");
+            e.chain().skip(1).for_each(|e| error!("because: {e}"));
             info!("Attempting to reconnect to the WM in 1 second");
             sleep(Duration::from_secs(1));
         }
