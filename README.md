@@ -13,6 +13,8 @@ A picture is better than a thousand words!
 * In context:
 ![alt tag](https://github.com/pierrechevalier83/workstyle/blob/master/screenshots/full.png)
 
+Note: if you are using waybar and want the workspaces to be displayed with their number, like in the screenshot, please set `"format": "{icon}",`. See [the waybar wiki](https://github.com/Alexays/Waybar/wiki/Module:-Workspaces) for more information on configuring waybar.
+
 Installation
 ===
 
