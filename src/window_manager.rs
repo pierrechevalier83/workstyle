@@ -117,17 +117,8 @@ pub struct WindowManager {
 impl WindowManager {
     pub fn connect() -> Result<Self> {
         Ok(Self {
-            connection: Connection::new()
-                .map_err(|e| {
-                    log::error!("{e}");
-                    e
-                })
-                .context("Couldn't connect to WM")?,
+            connection: Connection::new().context("Couldn't connect to WM")?,
             events: Connection::new()
-                .map_err(|e| {
-                    log::error!("{e}");
-                    e
-                })
                 .context("Couldn't connect to WM")?
                 .subscribe(&[EventType::Window])
                 .context("Couldn't subscribe to events of type Window")?,
@@ -137,10 +128,6 @@ impl WindowManager {
     pub fn get_windows_in_each_workspace(&mut self) -> Result<BTreeMap<String, Vec<Window>>> {
         self.connection
             .get_tree()
-            .map_err(|e| {
-                log::error!("{e}");
-                e
-            })
             .context("get_tree() failed")?
             .workspaces_in_node()
     }
@@ -148,10 +135,6 @@ impl WindowManager {
     pub fn rename_workspace(&mut self, old: &str, new: &str) -> Result<()> {
         self.connection
             .run_command(&format!("rename workspace \"{old}\" to \"{new}\"",))
-            .map_err(|e| {
-                log::error!("{e}");
-                e
-            })
             .context("Failed to rename the workspace")?;
         Ok(())
     }
