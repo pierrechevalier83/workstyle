@@ -148,6 +148,7 @@ fn main() -> Result<()> {
                 }
                 Err(error) => {
                     error!("{error}");
+                    error.chain().skip(1).for_each(|e| error!("because: {e}"));
                     error!("Failed to connect to WM. Will try again in 1 second");
                     sleep(Duration::from_secs(1));
                 }
@@ -155,9 +156,11 @@ fn main() -> Result<()> {
         };
 
         if let Err(error) = process_events(wm) {
-            error!("Error: {error}");
+            error!("{error}");
+            error.chain().skip(1).for_each(|e| error!("because: {e}"));
             error!("Couldn't process WM events. The WM might have been terminated");
-            info!("Attempting to reconnect to the WM");
+            info!("Attempting to reconnect to the WM in 1 second");
+            sleep(Duration::from_secs(1));
         }
     }
 }
