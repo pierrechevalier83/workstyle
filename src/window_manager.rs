@@ -14,6 +14,7 @@ trait NodeExt {
 
 impl NodeExt for Node {
     fn is_workspace(&self) -> bool {
+        // `__i3_scratch` is a special workspace that connot be renamed, so we just skip it
         self.name.as_deref() != Some("__i3_scratch") && self.node_type == NodeType::Workspace
     }
     fn is_window(&self) -> bool {
