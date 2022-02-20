@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use std::collections::BTreeMap;
 use swayipc::{Connection, EventStream, EventType, Node, NodeType};
 
@@ -51,8 +51,7 @@ impl NodeExt for Node {
         for node in &self.nodes {
             if node.is_workspace() {
                 res.insert(
-                    node.name()
-                        .ok_or_else(|| anyhow!("Expected some node name"))?,
+                    node.name().context("Expected some node name")?,
                     node.windows_in_node(),
                 );
             } else {

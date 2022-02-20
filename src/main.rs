@@ -1,7 +1,5 @@
 #[macro_use]
 extern crate log;
-#[macro_use]
-extern crate anyhow;
 
 mod config;
 mod window_manager;
@@ -13,7 +11,7 @@ use std::sync::Mutex;
 use std::thread::{sleep, spawn};
 use std::time::Duration;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
 use config::Config;
 use lockfile::Lockfile;
@@ -125,7 +123,7 @@ fn run() -> Result<()> {
             let num = name
                 .split(':')
                 .next()
-                .ok_or_else(|| anyhow!("Unexpected workspace name"))?;
+                .context("Unexpected workspace name")?;
             if new_name.is_empty() {
                 wm.rename_workspace(&name, num)?;
             } else {

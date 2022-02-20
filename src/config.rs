@@ -47,8 +47,7 @@ impl Config {
     }
 
     pub fn path() -> Result<PathBuf> {
-        let mut user_path =
-            dirs::config_dir().ok_or_else(|| anyhow!("Could not find the configuration path"))?;
+        let mut user_path = dirs::config_dir().context("Could not find the configuration path")?;
         let mut system_path = PathBuf::from("/etc/xdg");
 
         for path in [&mut user_path, &mut system_path] {
@@ -62,7 +61,7 @@ impl Config {
         };
         let dir = path
             .parent()
-            .ok_or_else(|| anyhow!("Expected path to contain a parent directory"))?;
+            .context("Expected path to contain a parent directory")?;
         if !dir.exists() {
             create_dir(dir).context("Failed to create configuration directory")?;
         }
