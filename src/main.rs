@@ -143,8 +143,7 @@ fn main() {
     aquire_lock();
     loop {
         if let Err(e) = run() {
-            error!("{e}");
-            e.chain().skip(1).for_each(|e| error!("because: {e}"));
+            error!("{e:#}");
             info!("Attempting to reconnect to the WM in 1 second");
             sleep(Duration::from_secs(1));
         }
