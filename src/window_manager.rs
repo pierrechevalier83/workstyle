@@ -14,7 +14,7 @@ trait NodeExt {
 
 impl NodeExt for Node {
     fn is_workspace(&self) -> bool {
-        self.node_type == NodeType::Workspace
+        self.name.as_deref() != Some("__i3_scratch") && self.node_type == NodeType::Workspace
     }
     fn is_window(&self) -> bool {
         matches!(self.node_type, NodeType::Con | NodeType::FloatingCon)
@@ -133,9 +133,13 @@ impl WindowManager {
     }
 
     pub fn rename_workspace(&mut self, old: &str, new: &str) -> Result<()> {
-        self.connection
+        for result in self
+            .connection
             .run_command(&format!("rename workspace \"{old}\" to \"{new}\"",))
-            .context("Failed to rename the workspace")?;
+            .context("Failed to rename the workspace")?
+        {
+            result.context("Failed to rename the workspace")?;
+        }
         Ok(())
     }
 

@@ -165,7 +165,8 @@ fn main() -> Result<()> {
                 .skip(1)
                 .for_each(|cause| error!("because: {}", cause));
             error!("Couldn't process WM events. The WM might have been terminated");
-            info!("Attempting to reconnect to the WM");
+            info!("Attempting to reconnect to the WM in 1 second");
+            sleep(Duration::from_secs(1));
         }
     }
 }
