@@ -98,4 +98,13 @@ If you prefer not to have multiple copies of the same icon when there are multip
 deduplicate_icons = true
 ```
 
+If you prefer that empty workspaces be named with an icon,
+instead of with a number, you can also specify:
+
+```toml
+[other]
+use_empty_icon = true
+empty_icon = ""
+```
+
 Note that the crate [`find_unicode`](https://github.com/pierrechevalier83/find_unicode/) can help find a unicode character directly from the command line. It now supports all of nerdfonts unicode space.

@@ -7,6 +7,7 @@ use std::io::{BufReader, Read, Write};
 use std::path::PathBuf;
 
 const DEFAULT_FALLBACK_ICON: &str = "-";
+const DEFAULT_EMPTY_ICON: &str = "o";
 const DEFAULT_CONFIG: &str = include_str!("../default_config.toml");
 
 #[derive(Debug, Default, Clone)]
@@ -20,6 +21,8 @@ pub struct Config {
 pub struct Other {
     pub fallback_icon: Option<String>,
     pub deduplicate_icons: bool,
+    pub use_empty_icon: bool,
+    pub empty_icon: Option<String>,
 }
 
 impl Config {
@@ -44,6 +47,13 @@ impl Config {
             .fallback_icon
             .as_deref()
             .unwrap_or(DEFAULT_FALLBACK_ICON)
+    }
+    
+    pub fn empty_icon(&self) -> &str {
+        self.other
+            .empty_icon
+            .as_deref()
+            .unwrap_or(DEFAULT_EMPTY_ICON)
     }
 
     pub fn path() -> Result<PathBuf> {

@@ -1,6 +1,8 @@
+use log::{info, debug};
+
 use anyhow::{anyhow, bail, Context, Result};
 use std::collections::BTreeMap;
-use swayipc::{Connection, EventStream, EventType, Node, NodeType};
+use swayipc::{Connection, EventStream, EventType, Node, NodeType, Event, WorkspaceChange, WindowChange};
 
 trait NodeExt {
     fn is_workspace(&self) -> bool;
@@ -114,14 +116,56 @@ pub struct WindowManager {
     events: EventStream,
 }
 
+fn should_rename_after_event(event: Event) -> Result<()> {
+    match event {
+        Event::Workspace(boxed_workspace_event) => {
+            match (*boxed_workspace_event).change {
+                ch @ WorkspaceChange::Focus => {
+                    // Triggering on Init triggers an extra focus after
+                    // the initial focus.
+                    // Simply running a rename on every Workspace Focus
+                    // prevents this irritating visual artifact,
+                    // at the cost of running renames more often.
+                    info!("Renaming on WorkspaceEvent: {:#?}", ch);
+                    Ok(())
+                },
+                ch @ _ => {
+                    debug!("Rejected Rename for WorkspaceEvent: {:#?}", ch);
+                    Err(anyhow!("bad_ev").context("Only certain WorkspaceChange events should trigger rename"))
+                },
+            }
+        }
+        Event::Window(boxed_window_event) => {
+            match (*boxed_window_event).change {
+                ch @ (
+                    WindowChange::New |
+                    WindowChange::Close |
+                    WindowChange::Title |
+                    WindowChange::Move |
+                    WindowChange::Urgent |
+                    WindowChange::Mark
+                ) => {
+                    info!("Renaming on WindowEvent: {:#?}", ch);
+                    Ok(())
+                },
+                ch @ _ => {
+                    debug!("Rejected Rename for WindowEvent: {:#?}", ch);
+                    Err(anyhow!("bad_ev").context("Only certain WindowChange events should trigger rename"))
+                },
+            }
+        }
+        _ => Err(anyhow!("bad_ev").context("Only certain Workspace and Window *Change events trigger a rename")),
+    }
+}
+
 impl WindowManager {
     pub fn connect() -> Result<Self> {
         Ok(Self {
             connection: Connection::new().context("Couldn't connect to WM")?,
             events: Connection::new()
                 .context("Couldn't connect to WM")?
-                .subscribe(&[EventType::Window])
-                .context("Couldn't subscribe to events of type Window")?,
+                .subscribe(&[EventType::Window, EventType::Workspace])
+                .context("Couldn't subscribe to events of type Window or Workspace")?,
         })
     }
 
@@ -147,7 +191,10 @@ impl WindowManager {
         match self.events.next() {
             Some(Err(e)) => Err(anyhow!(e).context("Failed to receive next event")),
             None => bail!("Event stream ended"),
-            _ => Ok(()),
+            Some(event) => {
+                // Scan the kind of event to get the relevant Result
+                should_rename_after_event(event.unwrap())
+            },
         }
     }
 }

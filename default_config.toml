@@ -34,3 +34,6 @@
 [other]
 fallback_icon = "🤨"
 deduplicate_icons = false
+
+use_empty_icon = false
+empty_icon = ""
