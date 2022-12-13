@@ -48,7 +48,7 @@ impl Config {
             .as_deref()
             .unwrap_or(DEFAULT_FALLBACK_ICON)
     }
-    
+
     pub fn empty_icon(&self) -> &str {
         self.other
             .empty_icon
