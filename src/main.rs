@@ -39,6 +39,13 @@ use window_manager::{Window, WindowManager, WM};
 ///
 /// [other]
 /// deduplicate_icons = true
+///
+/// If you prefer that empty workspaces be named with an icon,
+/// instead of with a number, you can also specify:
+///
+/// [other]
+/// empty_icon = ""
+
 #[derive(Parser, Debug)]
 #[clap(version, about, long_about)]
 struct Args {
@@ -127,6 +134,7 @@ fn run() -> Result<()> {
     info!("Successfully connected to WM");
 
     loop {
+        wm.wait_for_event()?;
         // TODO: watch for changes using inotify and read the config only when needed
         let config = Config::new()?;
         let sep: &str = config.separator();
@@ -139,13 +147,19 @@ fn run() -> Result<()> {
                 .next()
                 .context("Unexpected workspace name")?;
             if new_name.is_empty() {
-                wm.rename_workspace(&name, num)?;
+                let empty_name = if let Some(icon) = config.empty_icon() {
+                    icon
+                } else {
+                    num
+                }
+                .to_string();
+
+                // Extra space matches other workspace icons.
+                wm.rename_workspace(&name, &format!("{num}{sep}{empty_name} "))?;
             } else {
                 wm.rename_workspace(&name, &format!("{num}{sep}{new_name}"))?;
             }
         }
-
-        wm.wait_for_event()?;
     }
 }
 
