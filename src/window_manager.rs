@@ -122,12 +122,7 @@ fn should_rename_after_event(event: Event) -> Result<()> {
     match event {
         Event::Workspace(boxed_workspace_event) => {
             match (*boxed_workspace_event).change {
-                ch @ WorkspaceChange::Focus => {
-                    // Triggering on Init triggers an extra focus after
-                    // the initial focus.
-                    // Simply running a rename on every Workspace Focus
-                    // prevents this irritating visual artifact,
-                    // at the cost of running renames more often.
+                ch @ WorkspaceChange::Init => {
                     info!("Renaming on WorkspaceEvent: {:#?}", ch);
                     Ok(())
                 }
