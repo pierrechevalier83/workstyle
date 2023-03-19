@@ -1,7 +1,7 @@
 Workstyle
 ===
 
-Sway/i3 workspaces with style:
+Sway/i3/Hyprland workspaces with style:
 
 This application will dynamically rename your workspaces to indicate which programs are running in each one.
 
@@ -61,6 +61,14 @@ over
     bindsym $mod+1 workspace 1
 ```
 
+Hyprland configuration
+===
+
+Add this line to your sway config:
+```
+exec-once workstyle &> /tmp/workstyle.log
+```
+
 SystemD integration
 ====
 
@@ -99,3 +107,22 @@ deduplicate_icons = true
 ```
 
 Note that the crate [`find_unicode`](https://github.com/pierrechevalier83/find_unicode/) can help find a unicode character directly from the command line. It now supports all of nerdfonts unicode space.
+
+Minimal waybar configuration so the workspace names are showed
+===
+
+* For i3/sway
+```
+    "modules-left": ["sway/workspaces"],
+     "sway/workspaces": {
+         "format": "{icon}",
+     },
+```
+
+* For hyprland
+```
+    "modules-left": ["wlr/workspaces"],
+     "wlr/workspaces": {
+         "format": "{icon}",
+     },
+```

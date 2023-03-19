@@ -1,5 +1,12 @@
 use anyhow::{anyhow, bail, Context, Result};
+use hyprland::data::{Clients, Version};
+use hyprland::dispatch::{Dispatch, DispatchType};
+use hyprland::event_listener::EventListener;
+use hyprland::shared::HyprData;
+use itertools::Itertools;
 use std::collections::BTreeMap;
+use std::sync::{mpsc, mpsc::Receiver};
+use std::thread;
 use swayipc::{Connection, EventStream, EventType, Node, NodeType};
 
 trait NodeExt {
@@ -91,6 +98,9 @@ impl Window {
             None
         }
     }
+    fn exists(&self) -> bool {
+        self.name.is_some() || self.app_id.is_some() || self.window_properties_class.is_some()
+    }
     pub fn matches(&self, pattern: &str) -> bool {
         self.name
             .as_ref()
@@ -109,30 +119,163 @@ impl Window {
     }
 }
 
-pub struct WindowManager {
+pub trait WM {
+    fn connect() -> Result<Box<Self>>;
+    fn get_windows_in_each_workspace(&mut self) -> Result<BTreeMap<String, Vec<Window>>>;
+    fn rename_workspace(&mut self, old: &str, new: &str) -> Result<()>;
+    fn wait_for_event(&mut self) -> Result<()>;
+}
+
+pub enum WindowManager {
+    SwayOrI3(Box<SwayOrI3>),
+    Hyprland(Box<Hyprland>),
+}
+
+impl WM for WindowManager {
+    fn connect() -> Result<Box<Self>> {
+        if let Ok(wm) = SwayOrI3::connect() {
+            Ok(Box::new(Self::SwayOrI3(wm)))
+        } else if let Ok(wm) = Hyprland::connect() {
+            Ok(Box::new(Self::Hyprland(wm)))
+        } else {
+            bail!("Couldn't connect to the window manager. Only Sway, I3 and Hyprland are officially supported.")
+        }
+    }
+    fn get_windows_in_each_workspace(&mut self) -> Result<BTreeMap<String, Vec<Window>>> {
+        match self {
+            Self::SwayOrI3(wm) => wm.get_windows_in_each_workspace(),
+            Self::Hyprland(wm) => wm.get_windows_in_each_workspace(),
+        }
+    }
+    fn rename_workspace(&mut self, old: &str, new: &str) -> Result<()> {
+        match self {
+            Self::SwayOrI3(wm) => wm.rename_workspace(old, new),
+            Self::Hyprland(wm) => wm.rename_workspace(old, new),
+        }
+    }
+    fn wait_for_event(&mut self) -> Result<()> {
+        match self {
+            Self::SwayOrI3(wm) => wm.wait_for_event(),
+            Self::Hyprland(wm) => wm.wait_for_event(),
+        }
+    }
+}
+
+pub struct Hyprland {
+    rx: Receiver<()>,
+}
+
+impl WM for Hyprland {
+    fn connect() -> Result<Box<Self>> {
+        Version::get()?;
+        let (tx, rx) = mpsc::channel();
+        thread::spawn(move || {
+            let mut listener = EventListener::new();
+            let tx_clone = tx.clone();
+            listener.add_window_open_handler(move |_| {
+                tx_clone.send(()).unwrap();
+            });
+            let tx_clone = tx.clone();
+            listener.add_window_close_handler(move |_| {
+                tx_clone.send(()).unwrap();
+            });
+            let tx_clone = tx.clone();
+            listener.add_window_moved_handler(move |_| {
+                tx_clone.send(()).unwrap();
+            });
+            let tx_clone = tx.clone();
+            listener.add_layer_open_handler(move |_| {
+                tx_clone.send(()).unwrap();
+            });
+            listener.add_layer_closed_handler(move |_| {
+                tx.send(()).unwrap();
+            });
+            listener.start_listener().map_err(|e| anyhow!(e)).unwrap();
+        });
+        Ok(Box::new(Self { rx }))
+    }
+
+    fn get_windows_in_each_workspace(&mut self) -> Result<BTreeMap<String, Vec<Window>>> {
+        Ok(Clients::get()
+            .context("Failed to get clients")?
+            .map(|client| {
+                (
+                    client.workspace.id as u32,
+                    (
+                        // Keep the position so the order of the icons matches the order of the
+                        // windows on the screen, from left to right then top to bottom
+                        (
+                            client.at.1, /*y position in pixel*/
+                            client.at.0, /* x position in px */
+                        ),
+                        Window {
+                            name: match client.title.as_str() {
+                                "" => None,
+                                s => Some(s.to_string()),
+                            },
+                            app_id: None,
+                            window_properties_class: match client.class.as_str() {
+                                "" => None,
+                                s => Some(s.to_string()),
+                            },
+                        },
+                    ),
+                )
+            })
+            .into_group_map()
+            .into_iter()
+            .map(|(k, mut v)| {
+                // Sort by position
+                v.sort_by(|(l, _), (r, _)| l.cmp(r));
+                (
+                    format!("{k}"),
+                    v.into_iter()
+                        // We don't need the position anymore. Dismiss it
+                        .map(|(_pos, w)| w)
+                        .filter(|w| w.exists())
+                        .collect(),
+                )
+            })
+            .collect())
+    }
+
+    fn rename_workspace(&mut self, old: &str, new: &str) -> Result<()> {
+        Dispatch::call(DispatchType::RenameWorkspace(
+            old.parse().unwrap(),
+            Some(new),
+        ))
+        .context("Failed to rename workspace")
+    }
+
+    fn wait_for_event(&mut self) -> Result<()> {
+        self.rx.recv().context("Failed to wait for event")
+    }
+}
+
+pub struct SwayOrI3 {
     connection: Connection,
     events: EventStream,
 }
 
-impl WindowManager {
-    pub fn connect() -> Result<Self> {
-        Ok(Self {
+impl WM for SwayOrI3 {
+    fn connect() -> Result<Box<Self>> {
+        Ok(Box::new(Self {
             connection: Connection::new().context("Couldn't connect to WM")?,
             events: Connection::new()
                 .context("Couldn't connect to WM")?
-                .subscribe(&[EventType::Window])
+                .subscribe([EventType::Window])
                 .context("Couldn't subscribe to events of type Window")?,
-        })
+        }))
     }
 
-    pub fn get_windows_in_each_workspace(&mut self) -> Result<BTreeMap<String, Vec<Window>>> {
+    fn get_windows_in_each_workspace(&mut self) -> Result<BTreeMap<String, Vec<Window>>> {
         self.connection
             .get_tree()
             .context("get_tree() failed")?
             .workspaces_in_node()
     }
 
-    pub fn rename_workspace(&mut self, old: &str, new: &str) -> Result<()> {
+    fn rename_workspace(&mut self, old: &str, new: &str) -> Result<()> {
         for result in self
             .connection
             .run_command(&format!("rename workspace \"{old}\" to \"{new}\"",))
@@ -143,7 +286,7 @@ impl WindowManager {
         Ok(())
     }
 
-    pub fn wait_for_event(&mut self) -> Result<()> {
+    fn wait_for_event(&mut self) -> Result<()> {
         match self.events.next() {
             Some(Err(e)) => Err(anyhow!(e).context("Failed to receive next event")),
             None => bail!("Event stream ended"),

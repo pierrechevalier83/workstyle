@@ -18,7 +18,7 @@ use lockfile::Lockfile;
 use once_cell::sync::Lazy;
 use signal_hook::consts::TERM_SIGNALS;
 use signal_hook::iterator::Signals;
-use window_manager::{Window, WindowManager};
+use window_manager::{Window, WindowManager, WM};
 
 /// Workspaces with style!
 ///
