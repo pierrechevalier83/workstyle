@@ -308,6 +308,7 @@ checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
 [[package]]
 name = "hyprland"
 version = "0.3.1"
+source = "git+https://github.com/hyprland-community/hyprland-rs.git?branch=master#2d723dcdb9fbd5cb1f828c2510aca046fd5fb2bf"
 dependencies = [
  "async-trait",
  "derive_more",
@@ -329,6 +330,7 @@ dependencies = [
 [[package]]
 name = "hyprland-macros"
 version = "0.1.0"
+source = "git+https://github.com/hyprland-community/hyprland-rs.git?branch=master#2d723dcdb9fbd5cb1f828c2510aca046fd5fb2bf"
 dependencies = [
  "quote",
  "syn 1.0.109",
