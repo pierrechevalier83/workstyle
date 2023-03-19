@@ -200,7 +200,7 @@ impl WM for Hyprland {
             .context("Failed to get clients")?
             .map(|client| {
                 (
-                    client.workspace.id as u32,
+                    client.workspace.id,
                     (
                         // Keep the position so the order of the icons matches the order of the
                         // windows on the screen, from left to right then top to bottom
@@ -241,10 +241,10 @@ impl WM for Hyprland {
 
     fn rename_workspace(&mut self, old: &str, new: &str) -> Result<()> {
         Dispatch::call(DispatchType::RenameWorkspace(
-            old.parse().unwrap(),
+            old.parse().context("Failed to parse workspace id")?,
             Some(new),
         ))
-        .context("Failed to rename workspace")
+        .context(format!("Failed to rename workspace from {old} to {new}"))
     }
 
     fn wait_for_event(&mut self) -> Result<()> {
