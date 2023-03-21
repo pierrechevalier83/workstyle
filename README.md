@@ -64,9 +64,9 @@ over
 Hyprland configuration
 ===
 
-Add this line to your sway config:
+Add this line to your hyprland config:
 ```
-exec-once workstyle &> /tmp/workstyle.log
+exec-once = workstyle &> /tmp/workstyle.log
 ```
 
 SystemD integration
