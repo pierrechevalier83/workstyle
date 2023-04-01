@@ -66,7 +66,7 @@ Hyprland configuration
 
 Add this line to your Hyprland config:
 ```
-exec-once workstyle &> /tmp/workstyle.log
+exec-once = workstyle &> /tmp/workstyle.log
 ```
 
 SystemD integration
