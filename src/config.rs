@@ -7,6 +7,7 @@ use std::io::{BufReader, Read, Write};
 use std::path::PathBuf;
 
 const DEFAULT_FALLBACK_ICON: &str = "-";
+const DEFAULT_SEPARATOR: &str = ": ";
 const DEFAULT_CONFIG: &str = include_str!("../default_config.toml");
 
 #[derive(Debug, Default, Clone)]
@@ -19,6 +20,7 @@ pub struct Config {
 #[serde(default, deny_unknown_fields)]
 pub struct Other {
     pub fallback_icon: Option<String>,
+    pub separator: Option<String>,
     pub deduplicate_icons: bool,
 }
 
@@ -45,6 +47,14 @@ impl Config {
             .as_deref()
             .unwrap_or(DEFAULT_FALLBACK_ICON)
     }
+
+    pub fn separator(&self) -> &str {
+        self.other
+            .separator
+            .as_deref()
+            .unwrap_or(DEFAULT_SEPARATOR)
+    }
+
 
     pub fn path() -> Result<PathBuf> {
         let mut user_path = dirs::config_dir().context("Could not find the configuration path")?;

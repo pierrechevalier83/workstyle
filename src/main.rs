@@ -116,18 +116,19 @@ fn run() -> Result<()> {
     loop {
         // TODO: watch for changes using inotify and read the config only when needed
         let config = Config::new()?;
+        let sep: &str = config.separator().into();
 
         let workspaces = wm.get_windows_in_each_workspace()?;
         for (name, windows) in workspaces {
             let new_name = pretty_windows(&config, &windows);
             let num = name
-                .split(':')
+                .split(sep)
                 .next()
                 .context("Unexpected workspace name")?;
             if new_name.is_empty() {
                 wm.rename_workspace(&name, num)?;
             } else {
-                wm.rename_workspace(&name, &format!("{num}: {new_name}"))?;
+                wm.rename_workspace(&name, &format!("{num}{sep}{new_name}"))?;
             }
         }
 

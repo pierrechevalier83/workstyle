@@ -133,10 +133,10 @@ pub enum WindowManager {
 
 impl WM for WindowManager {
     fn connect() -> Result<Box<Self>> {
-        if let Ok(wm) = SwayOrI3::connect() {
-            Ok(Box::new(Self::SwayOrI3(wm)))
-        } else if let Ok(wm) = Hyprland::connect() {
+        if let Ok(wm) = Hyprland::connect() {
             Ok(Box::new(Self::Hyprland(wm)))
+        } else if let Ok(wm) = SwayOrI3::connect() {
+            Ok(Box::new(Self::SwayOrI3(wm)))
         } else {
             bail!("Couldn't connect to the window manager. Only Sway, I3 and Hyprland are officially supported.")
         }
