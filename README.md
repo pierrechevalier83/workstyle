@@ -64,7 +64,7 @@ over
 Hyprland configuration
 ===
 
-Add this line to your hyprland config:
+Add this line to your Hyprland config:
 ```
 exec-once = workstyle &> /tmp/workstyle.log
 ```
