@@ -7,6 +7,7 @@ use std::io::{BufReader, Read, Write};
 use std::path::PathBuf;
 
 const DEFAULT_FALLBACK_ICON: &str = "-";
+const DEFAULT_SEPARATOR: &str = ": ";
 const DEFAULT_CONFIG: &str = include_str!("../default_config.toml");
 
 #[derive(Debug, Default, Clone)]
@@ -19,6 +20,7 @@ pub struct Config {
 #[serde(default, deny_unknown_fields)]
 pub struct Other {
     pub fallback_icon: Option<String>,
+    pub separator: Option<String>,
     pub deduplicate_icons: bool,
 }
 
@@ -44,6 +46,24 @@ impl Config {
             .fallback_icon
             .as_deref()
             .unwrap_or(DEFAULT_FALLBACK_ICON)
+    }
+
+    pub fn separator(&self) -> &str {
+        let sep = self.other.separator.as_deref();
+        if let Some(sep) = sep {
+            let fallback_icon = self.fallback_icon();
+            if let Some(icon) = self.mappings.values().find(|icon| icon.contains(sep)) {
+                error!("Can't use separator: \"{sep}\" as it is contained in icon: \"{icon}\".");
+                DEFAULT_SEPARATOR
+            } else if fallback_icon.contains(sep) {
+                error!("Can't use separator: \"{sep}\" as it is contained in fallback icon: \"{fallback_icon}\"");
+                DEFAULT_SEPARATOR
+            } else {
+                sep
+            }
+        } else {
+            DEFAULT_SEPARATOR
+        }
     }
 
     pub fn path() -> Result<PathBuf> {
