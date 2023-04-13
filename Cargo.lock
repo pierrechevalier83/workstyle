@@ -716,8 +716,7 @@ dependencies = [
 [[package]]
 name = "swayipc"
 version = "3.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab1dcff328b223d85d7ca767b2e4aadbc13dad550d36b4c6b929b9ad4d26ee9a"
+source = "git+https://github.com/pierrechevalier83/swayipc-rs.git?branch=fix_crash_when_using_without_i3_or_sway#476b134dd019f74b68f673915eb27ff9d66f55d3"
 dependencies = [
  "serde",
  "serde_json",
@@ -727,8 +726,7 @@ dependencies = [
 [[package]]
 name = "swayipc-types"
 version = "1.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44b43b4059d825ccc04adf9726f944d0e3aa20938f4cff3b5c6b53198afcd6b3"
+source = "git+https://github.com/pierrechevalier83/swayipc-rs.git?branch=fix_crash_when_using_without_i3_or_sway#476b134dd019f74b68f673915eb27ff9d66f55d3"
 dependencies = [
  "serde",
  "serde_json",
