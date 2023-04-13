@@ -1,3 +1,4 @@
+use crate::EnforceWindowManager;
 use anyhow::{anyhow, bail, Context, Result};
 use hyprland::data::{Clients, Version, Workspaces};
 use hyprland::dispatch::{Dispatch, DispatchType};
@@ -120,7 +121,7 @@ impl Window {
 }
 
 pub trait WM {
-    fn connect() -> Result<Box<Self>>;
+    fn connect(enforce: Option<EnforceWindowManager>) -> Result<Box<Self>>;
     fn get_windows_in_each_workspace(&mut self) -> Result<BTreeMap<String, Vec<Window>>>;
     fn rename_workspace(&mut self, old: &str, new: &str) -> Result<()>;
     fn wait_for_event(&mut self) -> Result<()>;
@@ -132,13 +133,18 @@ pub enum WindowManager {
 }
 
 impl WM for WindowManager {
-    fn connect() -> Result<Box<Self>> {
-        if let Ok(wm) = SwayOrI3::connect() {
-            Ok(Box::new(Self::SwayOrI3(wm)))
-        } else if let Ok(wm) = Hyprland::connect() {
-            Ok(Box::new(Self::Hyprland(wm)))
-        } else {
-            bail!("Couldn't connect to the window manager. Only Sway, I3 and Hyprland are officially supported.")
+    fn connect(enforce: Option<EnforceWindowManager>) -> Result<Box<Self>> {
+        let connect_to_sway_or_i3 =
+            || SwayOrI3::connect(enforce).map(|wm| Box::new(Self::SwayOrI3(wm)));
+        let connect_to_hyprland =
+            || Hyprland::connect(enforce).map(|wm| Box::new(Self::Hyprland(wm)));
+        match enforce {
+            Some(EnforceWindowManager::SwayOrI3) => connect_to_sway_or_i3(),
+            Some(EnforceWindowManager::Hyprland) => connect_to_hyprland(),
+            None => {
+                connect_to_sway_or_i3().or_else(|_| connect_to_hyprland()).map_err(|_| anyhow!("Couldn't connect to the window manager. Only Sway, I3 and Hyprland are officially supported."))
+            }
+
         }
     }
     fn get_windows_in_each_workspace(&mut self) -> Result<BTreeMap<String, Vec<Window>>> {
@@ -166,33 +172,40 @@ pub struct Hyprland {
 }
 
 impl WM for Hyprland {
-    fn connect() -> Result<Box<Self>> {
-        Version::get()?;
-        let (tx, rx) = mpsc::channel();
-        thread::spawn(move || {
-            let mut listener = EventListener::new();
-            let tx_clone = tx.clone();
-            listener.add_window_open_handler(move |_| {
-                tx_clone.send(()).unwrap();
-            });
-            let tx_clone = tx.clone();
-            listener.add_window_close_handler(move |_| {
-                tx_clone.send(()).unwrap();
-            });
-            let tx_clone = tx.clone();
-            listener.add_window_moved_handler(move |_| {
-                tx_clone.send(()).unwrap();
-            });
-            let tx_clone = tx.clone();
-            listener.add_layer_open_handler(move |_| {
-                tx_clone.send(()).unwrap();
-            });
-            listener.add_layer_closed_handler(move |_| {
-                tx.send(()).unwrap();
-            });
-            listener.start_listener().map_err(|e| anyhow!(e)).unwrap();
-        });
-        Ok(Box::new(Self { rx }))
+    fn connect(enforce: Option<EnforceWindowManager>) -> Result<Box<Self>> {
+        match enforce {
+            None | Some(EnforceWindowManager::Hyprland) => {
+                Version::get()?;
+                let (tx, rx) = mpsc::channel();
+                thread::spawn(move || {
+                    let mut listener = EventListener::new();
+                    let tx_clone = tx.clone();
+                    listener.add_window_open_handler(move |_| {
+                        tx_clone.send(()).unwrap();
+                    });
+                    let tx_clone = tx.clone();
+                    listener.add_window_close_handler(move |_| {
+                        tx_clone.send(()).unwrap();
+                    });
+                    let tx_clone = tx.clone();
+                    listener.add_window_moved_handler(move |_| {
+                        tx_clone.send(()).unwrap();
+                    });
+                    let tx_clone = tx.clone();
+                    listener.add_layer_open_handler(move |_| {
+                        tx_clone.send(()).unwrap();
+                    });
+                    listener.add_layer_closed_handler(move |_| {
+                        tx.send(()).unwrap();
+                    });
+                    listener.start_listener().map_err(|e| anyhow!(e)).unwrap();
+                });
+                Ok(Box::new(Self { rx }))
+            }
+            _ => {
+                bail!("Not connecting to Hyprland as we've been explicitly asked not to")
+            }
+        }
     }
 
     fn get_windows_in_each_workspace(&mut self) -> Result<BTreeMap<String, Vec<Window>>> {
@@ -268,14 +281,17 @@ pub struct SwayOrI3 {
 }
 
 impl WM for SwayOrI3 {
-    fn connect() -> Result<Box<Self>> {
-        Ok(Box::new(Self {
-            connection: Connection::new().context("Couldn't connect to WM")?,
-            events: Connection::new()
-                .context("Couldn't connect to WM")?
-                .subscribe([EventType::Window])
-                .context("Couldn't subscribe to events of type Window")?,
-        }))
+    fn connect(enforce: Option<EnforceWindowManager>) -> Result<Box<Self>> {
+        match enforce {
+            None | Some(EnforceWindowManager::SwayOrI3) => Ok(Box::new(Self {
+                connection: Connection::new().context("Couldn't connect to WM")?,
+                events: Connection::new()
+                    .context("Couldn't connect to WM")?
+                    .subscribe([EventType::Window])
+                    .context("Couldn't subscribe to events of type Window")?,
+            })),
+            _ => bail!("Not connecting to Sway or i3 as we've explicitly been asked not to"),
+        }
     }
 
     fn get_windows_in_each_workspace(&mut self) -> Result<BTreeMap<String, Vec<Window>>> {
