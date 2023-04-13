@@ -12,7 +12,7 @@ use std::thread::{sleep, spawn};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use config::Config;
 use lockfile::Lockfile;
 use once_cell::sync::Lazy;
@@ -38,8 +38,17 @@ use window_manager::{Window, WindowManager, WM};
 /// [other]
 /// deduplicate_icons = true
 #[derive(Parser, Debug)]
-#[clap(version, about)]
-struct Args;
+#[clap(version, about, long_about)]
+struct Args {
+    #[arg(short, long)]
+    enforce_window_manager: Option<EnforceWindowManager>,
+}
+
+#[derive(ValueEnum, Debug, Clone, Copy)]
+pub enum EnforceWindowManager {
+    SwayOrI3,
+    Hyprland,
+}
 
 static LOCK: Lazy<Mutex<Option<Lockfile>>> =
     Lazy::new(|| Mutex::new(Lockfile::create(lockfile_path()).ok()));
@@ -110,7 +119,8 @@ fn aquire_lock() {
 }
 
 fn run() -> Result<()> {
-    let mut wm = WindowManager::connect()?;
+    let args = Args::parse();
+    let mut wm = WindowManager::connect(args.enforce_window_manager)?;
     info!("Successfully connected to WM");
 
     loop {
