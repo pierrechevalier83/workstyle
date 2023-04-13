@@ -1,5 +1,5 @@
 use anyhow::{anyhow, bail, Context, Result};
-use hyprland::data::{Clients, Version};
+use hyprland::data::{Clients, Version, Workspaces};
 use hyprland::dispatch::{Dispatch, DispatchType};
 use hyprland::event_listener::EventListener;
 use hyprland::shared::HyprData;
@@ -196,6 +196,15 @@ impl WM for Hyprland {
     }
 
     fn get_windows_in_each_workspace(&mut self) -> Result<BTreeMap<String, Vec<Window>>> {
+        let empty_workspaces = Workspaces::get()
+            .context("Failed to get workspaces")?
+            .filter_map(|workspace| {
+                if workspace.windows == 0 {
+                    Some((format!("{}", workspace.id), Vec::new()))
+                } else {
+                    None
+                }
+            });
         Ok(Clients::get()
             .context("Failed to get clients")?
             .map(|client| {
@@ -236,6 +245,7 @@ impl WM for Hyprland {
                         .collect(),
                 )
             })
+            .chain(empty_workspaces)
             .collect())
     }
 
