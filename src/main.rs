@@ -2,6 +2,8 @@
 extern crate log;
 
 mod config;
+#[cfg(test)]
+mod tests;
 mod window_manager;
 
 use std::collections::HashSet;

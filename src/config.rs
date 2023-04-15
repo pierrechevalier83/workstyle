@@ -41,6 +41,11 @@ impl Config {
         }
     }
 
+    #[cfg(test)]
+    pub(crate) fn from_str(s: &str) -> Result<Self> {
+        toml::from_str(s).context("Failed to parse config as toml")
+    }
+
     pub fn fallback_icon(&self) -> &str {
         self.other
             .fallback_icon
