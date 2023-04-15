@@ -75,9 +75,9 @@ impl NodeExt for Node {
 
 #[derive(Debug)]
 pub struct Window {
-    name: Option<String>,
-    app_id: Option<String>,
-    window_properties_class: Option<String>,
+    pub(crate) name: Option<String>,
+    pub(crate) app_id: Option<String>,
+    pub(crate) window_properties_class: Option<String>,
 }
 
 impl Window {
