@@ -16,7 +16,7 @@ use clap::{Parser, ValueEnum};
 use config::Config;
 use lockfile::Lockfile;
 use once_cell::sync::Lazy;
-use signal_hook::consts::TERM_SIGNALS;
+use signal_hook::consts::{SIGHUP, SIGINT, SIGQUIT, SIGTERM};
 use signal_hook::iterator::Signals;
 use window_manager::{Window, WindowManager, WM};
 
@@ -102,7 +102,8 @@ fn aquire_lock() {
     }
 
     // Drop the lock on exit
-    let mut signals = Signals::new(TERM_SIGNALS).expect("Failed to create signals iterator");
+    let mut signals = Signals::new([SIGTERM, SIGQUIT, SIGINT, SIGHUP])
+        .expect("Failed to create signals iterator");
     spawn(move || {
         let _ = signals.forever().next();
         drop(LOCK.lock().unwrap().take());
