@@ -829,7 +829,7 @@ dependencies = [
 [[package]]
 name = "swayipc"
 version = "3.0.1"
-source = "git+https://github.com/pierrechevalier83/swayipc-rs.git?branch=fix_crash_when_using_without_i3_or_sway#e8eb2d8efba285b577c5e585af203baf9096b85f"
+source = "git+https://github.com/chovanecadam/swayipc-rs.git?branch=master#bee50ead80ed5453da2c81cbdf213a25811f0a81"
 dependencies = [
  "serde",
  "serde_json",
@@ -839,7 +839,7 @@ dependencies = [
 [[package]]
 name = "swayipc-types"
 version = "1.3.0"
-source = "git+https://github.com/pierrechevalier83/swayipc-rs.git?branch=fix_crash_when_using_without_i3_or_sway#e8eb2d8efba285b577c5e585af203baf9096b85f"
+source = "git+https://github.com/chovanecadam/swayipc-rs.git?branch=master#bee50ead80ed5453da2c81cbdf213a25811f0a81"
 dependencies = [
  "serde",
  "serde_json",
