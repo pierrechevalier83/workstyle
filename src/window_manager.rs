@@ -302,6 +302,9 @@ impl WM for SwayOrI3 {
     }
 
     fn rename_workspace(&mut self, old: &str, new: &str) -> Result<()> {
+        if old == new {
+            return Ok(());
+        }
         for result in self
             .connection
             .run_command(&format!("rename workspace \"{old}\" to \"{new}\"",))
