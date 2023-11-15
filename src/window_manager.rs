@@ -195,7 +195,11 @@ impl WM for Hyprland {
                     listener.add_layer_open_handler(move |_| {
                         tx_clone.send(()).unwrap();
                     });
+                    let tx_clone = tx.clone();
                     listener.add_layer_closed_handler(move |_| {
+                        tx_clone.send(()).unwrap();
+                    });
+                    listener.add_workspace_change_handler(move |_| {
                         tx.send(()).unwrap();
                     });
                     listener.start_listener().map_err(|e| anyhow!(e)).unwrap();
