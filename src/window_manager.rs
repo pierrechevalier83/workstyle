@@ -8,7 +8,7 @@ use itertools::Itertools;
 use std::collections::BTreeMap;
 use std::sync::{mpsc, mpsc::Receiver};
 use std::thread;
-use swayipc::{Connection, EventStream, EventType, Node, NodeType};
+use swayipc::{Connection, EventStream, EventType, Floating, Node, NodeType};
 
 trait NodeExt {
     fn is_workspace(&self) -> bool;
@@ -86,7 +86,18 @@ impl Window {
             let name = node.name();
             let app_id = node.app_id();
             let window_properties_class = node.window_properties_class();
-            if name.is_some() || app_id.is_some() || window_properties_class.is_some() {
+
+            let sway_floating: bool = node.node_type == NodeType::FloatingCon;
+            let i3_floating: bool = match node.floating {
+                Some(Floating::UserOn) => true,
+                Some(Floating::AutoOn) => true,
+                Some(_) => false,
+                None => false,
+            };
+
+            if !(node.sticky && (sway_floating || i3_floating))
+                && (name.is_some() || app_id.is_some() || window_properties_class.is_some())
+            {
                 Some(Self {
                     name,
                     app_id,
