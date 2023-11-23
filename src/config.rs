@@ -22,6 +22,7 @@ pub struct Other {
     pub fallback_icon: Option<String>,
     pub separator: Option<String>,
     pub deduplicate_icons: bool,
+    pub empty_icon: Option<String>,
 }
 
 impl Config {
@@ -69,6 +70,9 @@ impl Config {
         } else {
             DEFAULT_SEPARATOR
         }
+    }
+    pub fn empty_icon(&self) -> Option<&str> {
+        self.other.empty_icon.as_deref()
     }
 
     pub fn path() -> Result<PathBuf> {
