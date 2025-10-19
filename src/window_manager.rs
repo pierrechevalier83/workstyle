@@ -1,4 +1,6 @@
 use crate::EnforceWindowManager;
+use log::{debug, info};
+
 use anyhow::{anyhow, bail, Context, Result};
 use hyprland::data::{Clients, Version, Workspaces};
 use hyprland::dispatch::{Dispatch, DispatchType};
@@ -8,7 +10,9 @@ use itertools::Itertools;
 use std::collections::BTreeMap;
 use std::sync::{mpsc, mpsc::Receiver};
 use std::thread;
-use swayipc::{Connection, EventStream, EventType, Node, NodeType};
+use swayipc::{
+    Connection, Event, EventStream, EventType, Node, NodeType, WindowChange, WorkspaceChange,
+};
 
 trait NodeExt {
     fn is_workspace(&self) -> bool;
@@ -291,13 +295,12 @@ impl WM for SwayOrI3 {
                 connection: Connection::new().context("Couldn't connect to WM")?,
                 events: Connection::new()
                     .context("Couldn't connect to WM")?
-                    .subscribe([EventType::Window])
-                    .context("Couldn't subscribe to events of type Window")?,
+                    .subscribe([EventType::Window, EventType::Workspace])
+                    .context("Couldn't subscribe to events of type Window and Workspace")?,
             })),
             _ => bail!("Not connecting to Sway or i3 as we've explicitly been asked not to"),
         }
     }
-
     fn get_windows_in_each_workspace(&mut self) -> Result<BTreeMap<String, Vec<Window>>> {
         self.connection
             .get_tree()
@@ -320,10 +323,54 @@ impl WM for SwayOrI3 {
     }
 
     fn wait_for_event(&mut self) -> Result<()> {
-        match self.events.next() {
-            Some(Err(e)) => Err(anyhow!(e).context("Failed to receive next event")),
-            None => bail!("Event stream ended"),
-            _ => Ok(()),
+        let next_relevant_event = self.events.find_map(move |event| {
+            if let Ok(event) = event {
+                if Self::event_is_relevant(&event) {
+                    Some(Ok(()))
+                } else {
+                    None
+                }
+            } else {
+                Some(Err(()))
+            }
+        });
+        if next_relevant_event.is_none() {
+            bail!("Event stream ended")
+        } else {
+            Ok(())
+        }
+    }
+}
+
+impl SwayOrI3 {
+    fn event_is_relevant(event: &Event) -> bool {
+        match event {
+            Event::Workspace(boxed_workspace_event) => match boxed_workspace_event.change {
+                ch @ WorkspaceChange::Init => {
+                    info!("Renaming on WorkspaceEvent: {:#?}", ch);
+                    true
+                }
+                ch => {
+                    debug!("Rejected Rename for WorkspaceEvent: {:#?}", ch);
+                    false
+                }
+            },
+            Event::Window(boxed_window_event) => match boxed_window_event.change {
+                ch @ (WindowChange::New
+                | WindowChange::Close
+                | WindowChange::Title
+                | WindowChange::Move
+                | WindowChange::Urgent
+                | WindowChange::Mark) => {
+                    info!("Renaming on WindowEvent: {:#?}", ch);
+                    true
+                }
+                ch => {
+                    debug!("Rejected Rename for WindowEvent: {:#?}", ch);
+                    false
+                }
+            },
+            _ => false,
         }
     }
 }
