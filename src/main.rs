@@ -72,7 +72,7 @@ fn pretty_windows(config: &Config, windows: &[Window]) -> String {
         let mut set = HashSet::new();
         for window in windows {
             let icon = pretty_window(config, window);
-            if set.get(&icon).is_none() {
+            if !set.contains(&icon) {
                 s.push_str(&icon);
                 s.push(' ');
                 set.insert(icon);

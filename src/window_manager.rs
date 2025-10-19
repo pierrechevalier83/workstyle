@@ -313,7 +313,7 @@ impl WM for SwayOrI3 {
         }
         for result in self
             .connection
-            .run_command(&format!("rename workspace \"{old}\" to \"{new}\"",))
+            .run_command(format!("rename workspace \"{old}\" to \"{new}\"",))
             .context("Failed to rename the workspace")?
         {
             result.context("Failed to rename the workspace")?;
