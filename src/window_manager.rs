@@ -180,11 +180,11 @@ impl WM for Hyprland {
                 thread::spawn(move || {
                     let mut listener = EventListener::new();
                     let tx_clone = tx.clone();
-                    listener.add_window_open_handler(move |_| {
+                    listener.add_window_opened_handler(move |_| {
                         tx_clone.send(()).unwrap();
                     });
                     let tx_clone = tx.clone();
-                    listener.add_window_close_handler(move |_| {
+                    listener.add_window_closed_handler(move |_| {
                         tx_clone.send(()).unwrap();
                     });
                     let tx_clone = tx.clone();
@@ -192,14 +192,14 @@ impl WM for Hyprland {
                         tx_clone.send(()).unwrap();
                     });
                     let tx_clone = tx.clone();
-                    listener.add_layer_open_handler(move |_| {
+                    listener.add_layer_opened_handler(move |_| {
                         tx_clone.send(()).unwrap();
                     });
                     let tx_clone = tx.clone();
                     listener.add_layer_closed_handler(move |_| {
                         tx_clone.send(()).unwrap();
                     });
-                    listener.add_workspace_change_handler(move |_| {
+                    listener.add_workspace_changed_handler(move |_| {
                         tx.send(()).unwrap();
                     });
                     listener.start_listener().map_err(|e| anyhow!(e)).unwrap();
@@ -215,7 +215,8 @@ impl WM for Hyprland {
     fn get_windows_in_each_workspace(&mut self) -> Result<BTreeMap<String, Vec<Window>>> {
         let empty_workspaces = Workspaces::get()
             .context("Failed to get workspaces")?
-            .into_iter().filter_map(|workspace| {
+            .into_iter()
+            .filter_map(|workspace| {
                 if workspace.windows == 0 {
                     Some((format!("{}", workspace.id), Vec::new()))
                 } else {
@@ -224,7 +225,8 @@ impl WM for Hyprland {
             });
         Ok(Clients::get()
             .context("Failed to get clients")?
-            .into_iter().map(|client| {
+            .into_iter()
+            .map(|client| {
                 (
                     client.workspace.id,
                     (
