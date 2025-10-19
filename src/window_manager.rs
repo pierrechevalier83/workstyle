@@ -215,7 +215,7 @@ impl WM for Hyprland {
     fn get_windows_in_each_workspace(&mut self) -> Result<BTreeMap<String, Vec<Window>>> {
         let empty_workspaces = Workspaces::get()
             .context("Failed to get workspaces")?
-            .filter_map(|workspace| {
+            .into_iter().filter_map(|workspace| {
                 if workspace.windows == 0 {
                     Some((format!("{}", workspace.id), Vec::new()))
                 } else {
@@ -224,7 +224,7 @@ impl WM for Hyprland {
             });
         Ok(Clients::get()
             .context("Failed to get clients")?
-            .map(|client| {
+            .into_iter().map(|client| {
                 (
                     client.workspace.id,
                     (

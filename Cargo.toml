@@ -25,5 +25,5 @@ once_cell = "1.9"
 toml = { "version" = "0.5.8", "features" = ["preserve_order"] }
 signal-hook = { version = "0.3.13", default-features = false, features = ["iterator"] }
 clap = { version = "4.0", features = ["derive", "std"] }
-hyprland = { version = "0.3.12" }
+hyprland = { version = "0.4.0-alpha.2" }
 itertools = "0.10.5"
